@@ -20,14 +20,13 @@ class YouTubeServer:
                 if user not in self.subscriptions:
                     self.subscriptions[user] = set()
                 self.subscriptions[user].add(youtuber)
-            elif subscribe_action == 'unsubscribed':  # Changed to elif
-                if user in self.subscriptions:  # Checking if user is already in subscriptions
-                    self.subscriptions[user].discard(youtuber)  # Using discard to safely remove if exists
+            elif subscribe_action == 'unsubscribed':  
+                if user in self.subscriptions:  
+                    self.subscriptions[user].discard(youtuber)  
 
         else:
             print("user log in")
-            #call the notify user
-            youtube_server.notify_users()
+            
 
     def consume_youtuber_requests(self, ch, method, properties, body):
         message = eval(body)
@@ -43,13 +42,7 @@ class YouTubeServer:
                 self.channel.basic_publish(exchange='', routing_key=user_reply_queue, body=str(notification_message))
                 print(f"Notification sent to {user}: {youtuber} uploaded a new video")
 
-    def notify_users(self):
-        for user, subscribed_youtubers in self.subscriptions.items():
-            for youtuber in subscribed_youtubers:
-                message = {"youtuber": youtuber, "videoName": "New Video"}
-                user_reply_queue=f"{user}_reply"
-                self.channel.basic_publish(exchange='', routing_key=user_reply_queue, body=str(message))
-                print(f"Notification sent to {user}: {youtuber} uploaded a new video")
+
 
     def start_consuming(self):
         self.channel.basic_consume(queue='user_requests', on_message_callback=self.consume_user_requests, auto_ack=True)

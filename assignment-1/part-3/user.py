@@ -48,5 +48,5 @@ if __name__ == '__main__':
             user.subscribe_action = action
             user.youtuber_name = youtuber_name
             user.update_subscription()
-        if len(sys.argv) == 2:
-            user.start_receiving_notifications()
+        
+        user.start_receiving_notifications()
