@@ -16,7 +16,7 @@ class User:
         channel.basic_publish(exchange='', routing_key='user_requests', body=str(message))
 
         print("SUCCESS: Subscription/Unsubscription updated")
-        #connection.close()
+        
 
     def receive_notifications(self, ch, method, properties, body):
         message = eval(body)
