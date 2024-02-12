@@ -4,7 +4,7 @@
 ## In /etc/ssh/sshd_config
 ## change -> PasswordAuthentication yes
 ## sudo service ssh restart
-## sudo passwd $USER
+## sudo passwd
 sudo apt update
 sudo apt upgrade
 
