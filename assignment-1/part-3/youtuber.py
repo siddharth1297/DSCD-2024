@@ -17,10 +17,12 @@ class Youtuber:
         connection.close()
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3:
         print("Usage: python Youtuber.py <YoutuberName> <VideoName>")
     else:
         youtuber_name = sys.argv[1]
-        video_name = sys.argv[2]
+        video_name = sys.argv[2:]
+        video_name=' '.join(video_name)
+             
         youtuber = Youtuber(youtuber_name, video_name)
         youtuber.publish_video()

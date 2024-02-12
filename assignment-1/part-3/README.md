@@ -27,3 +27,6 @@ user: subscribe
 youtuber: publish
 user: listen
 2. one-to-one
+
+3. we can't delete the message form queue after it stored in the queue 
+    problem: after unsubscribeing the youtuber from the user messege will delevired of the video of the youtuber if the youtuber has uploded any video when the user is not login.
