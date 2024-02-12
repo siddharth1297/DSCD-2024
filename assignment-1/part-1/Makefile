@@ -1,6 +1,6 @@
 PROTO_OUT=./
 
-SRC = market.py seller.py buyer.py
+SRC = market.py seller.py buyer.py util.py
 PYLINT_IGNORE=too-many-instance-attributes,too-many-function-args,logging-too-many-args
 protoc:
 	python3 -m grpc_tools.protoc -I./protos --python_out=$(PROTO_OUT) --grpc_python_out=$(PROTO_OUT) ./protos/market_service.proto

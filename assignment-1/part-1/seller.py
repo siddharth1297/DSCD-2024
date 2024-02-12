@@ -11,12 +11,16 @@ import market_service_pb2
 import market_service_pb2_grpc
 
 import market
+import util
+from util import ItemCategory
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - [%(pathname)s:%(funcName)s:%(lineno)d] - %(message)s",
     level=logging.DEBUG,
 )
 logger = logging.getLogger()
+
+CMD_MODE = True
 
 
 class SellerService:
@@ -67,12 +71,8 @@ class Seller:
                     address=self.servicer.server_address, unique_id=self.unique_id
                 ),
             )
-            if kwargs["category"] == market.ItemCategory.ELECTRONICS:
-                request.electronics = True
-            elif kwargs["category"] == market.ItemCategory.FASHION:
-                request.fashion = True
-            else:
-                request.other = True
+            util.set_pb_msg_category(request, kwargs["category"])
+            # TODO: Add assert on category
         except KeyError as key_err:
             logger.error("Item details not provided. %s", key_err)
             return False
@@ -102,7 +102,9 @@ class Seller:
             stub = market_service_pb2_grpc.MarketServiceStub(channel)
             response = stub.displaySellerItems(request)
             items = list(map(market.Item.item_detils_to_item, response.items))
-            logger.info("Seller Items\n-\n{}".format("\n-\n".join(map(str, items))))
+            logger.info(
+                "Seller Items %s", "\n-\n{}".format("\n-\n".join(map(str, items)))
+            )
             return items
         return []
 
@@ -124,6 +126,81 @@ class Seller:
         return False
 
 
+class Dialogue:
+    """Dialogue"""
+
+    def __init__(
+        self,
+        seller_server_ip: int,
+        seller_server_port: int,
+        market_server_ip: str,
+        market_server_port: int,
+    ):
+        self.seller = Seller(
+            seller_server_ip, seller_server_port, market_server_ip, market_server_port
+        )
+
+    @staticmethod
+    def to_category(cat: int) -> ItemCategory:
+        """
+        Converts to category
+        """
+        if cat == 1:
+            return ItemCategory.ELECTRONICS
+        if cat == 2:
+            return ItemCategory.FASHION
+        return ItemCategory.OTHERS
+
+    def start(self):
+        """
+        Start process
+        """
+        if not self.seller.start():
+            return
+        while True:
+            cmd = input(
+                "\nEnter 0-Exit 1-SellItem 2-UpdateItem 3-DeleteItem 4-DisplaySellerItem: "
+            )
+            if not cmd.isdigit():
+                continue
+            cmd = int(cmd)
+            if cmd == 0:
+                break
+
+            if cmd == 1:
+                product_name = input("product_name: ")
+                ip_category = input(
+                    "category (1-ELECTRONICS 2-FASHION 3-OTHERS): "
+                )
+                if not ip_category.isdigit():
+                    continue
+                category = Dialogue.to_category(int(ip_category))
+                if category == ItemCategory.ANY:
+                    continue
+                qty = input("quantity: ")
+                if not qty.isdigit():
+                    continue
+                qty = int(qty)
+                if qty < 0:
+                    continue
+                desc = input("description: ")
+                ppu = input("price_per_unit: ")
+                
+                if not ppu.isdigit():
+                    continue
+                ppu = float(ppu)
+                if ppu < 0:
+                    continue
+                self.seller.sell_item(
+                    product_name=product_name,
+                    quantity=qty,
+                    description=desc,
+                    price_per_unit=ppu,
+                    category=category,
+                )
+            if cmd == 4:
+                self.seller.display_sellers_items()
+
 def main(
     seller_server_ip: str,
     seller_server_port: int,
@@ -133,6 +210,12 @@ def main(
     """
     main
     """
+    if CMD_MODE:
+        Dialogue(
+            seller_server_ip, seller_server_port, market_server_ip, market_server_port
+        ).start()
+        return
+
     seller = Seller(
         seller_server_ip, seller_server_port, market_server_ip, market_server_port
     )

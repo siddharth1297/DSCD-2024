@@ -12,6 +12,9 @@ import grpc
 import market_service_pb2
 import market_service_pb2_grpc
 
+import util
+from util import ItemCategory
+
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - [%(pathname)s:%(funcName)s:%(lineno)d] - %(message)s",
     level=logging.DEBUG,
@@ -28,17 +31,6 @@ class ClientType(enum.Enum):
 
     BUYER = "BUYER"
     SELLER = "SELLER"
-
-    def __str__(self):
-        return self.value
-
-
-class ItemCategory(enum.Enum):
-    """Item Type"""
-
-    ELECTRONICS = "ELECTRONICS"
-    FASHION = "FASHION"
-    OTHERS = "OTHERS"
 
     def __str__(self):
         return self.value
@@ -143,12 +135,7 @@ class Item:
                 address=item.seller.address, unique_id=item.seller.unique_id
             ),
         )
-        if item.category == ItemCategory.ELECTRONICS:
-            item_details.electronics = True
-        elif item.category == ItemCategory.FASHION:
-            item_details.fashion = True
-        else:
-            item_details.other = True
+        util.set_pb_msg_category(item_details, item.category)
         return item_details
 
     @classmethod
@@ -156,19 +143,10 @@ class Item:
         """
         Converts ItemDetails(proto) to Item
         """
-        category = (
-            ItemCategory.ELECTRONICS
-            if request.HasField("electronics")
-            else (
-                ItemCategory.FASHION
-                if request.HasField("fashion")
-                else ItemCategory.OTHERS
-            )
-        )
         return cls(
             item_id=request.item_id,
             product_name=request.product_name,
-            category=category,
+            category=util.item_category(request),
             quantity=request.quantity,
             description=request.description,
             price_per_unit=request.price_per_unit,
@@ -212,18 +190,9 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
     ) -> market_service_pb2.ItemOpResp:
         """RPC SellItem"""
         # TODO: Use item_detils_to_item function
-        category = (
-            ItemCategory.ELECTRONICS
-            if request.HasField("electronics")
-            else (
-                ItemCategory.FASHION
-                if request.HasField("fashion")
-                else ItemCategory.OTHERS
-            )
-        )
         status, item_id = self.market.add_item(
             product_name=request.product_name,
-            category=category,
+            category=util.item_category(request),
             quantity=request.quantity,
             description=request.description,
             price_per_unit=request.price_per_unit,
@@ -279,6 +248,17 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
                 request.unique_id,
                 ClientType.SELLER,
             ),
+        )
+        return market_service_pb2.ItemsList(
+            items=list(map(Item.item_to_item_details, items))
+        )
+
+    def searchItem(
+        self, request: market_service_pb2.SearchItemReq, context
+    ) -> market_service_pb2.ItemsList:
+        """RPC SearchItem"""
+        items = self.market.search_items(
+            product_name=request.product_name, category=util.item_category(request)
         )
         return market_service_pb2.ItemsList(
             items=list(map(Item.item_to_item_details, items))
@@ -435,10 +415,39 @@ class Market:
         items = list(
             filter(lambda item: item.seller == seller, self.items_dict.values())
         )
-        logger.info("ITEMS: %s", items)
-        # for item_id, item in self.items_dict.items():
-        #    if item.seller == seller:
-        #        items.append(item)
+        return items
+
+    def search_items(self, **kwargs) -> List[Item]:
+        """
+        Seller's item
+        Returns seller's items list
+        """
+        product_name = kwargs["product_name"]
+        category = kwargs["category"]
+        logger.info(
+            "Search request for Item name: %s, Category: %s.", product_name, category
+        )
+        items = []
+
+        # Collect the items
+        if product_name == "":
+            if category == ItemCategory.ANY:
+                items = self.items_dict.values()
+            else:
+                items = list(
+                    filter(
+                        lambda item: item.category == category,
+                        self.items_dict.values(),
+                    )
+                )
+        else:
+            items = list(
+                filter(
+                    lambda item: item.product_name == product_name
+                    and item.category == category,
+                    self.items_dict.values(),
+                )
+            )
         return items
 
     def __verify_credentials(self, client: Client) -> bool:

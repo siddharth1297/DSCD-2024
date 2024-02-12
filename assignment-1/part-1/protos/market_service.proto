@@ -8,6 +8,8 @@ service MarketService {
 	rpc updateItem(ItemDetails) returns (ItemOpResp) {}
 	rpc deleteItem(ItemDetails) returns (ItemOpResp) {}
 	rpc displaySellerItems(ClientDetails) returns (ItemsList) {}
+
+	rpc searchItem(SearchItemReq) returns (ItemsList) {}
 }
 
 message ClientDetails {
@@ -42,4 +44,14 @@ message ItemsList {
 message ItemOpResp {
 	bool status = 1;
 	optional int32 item_id = 2;
+}
+
+message SearchItemReq {
+	string product_name = 1;
+	oneof category {
+		bool electronics = 2;
+                bool fashion = 3;
+                bool others = 4;
+		bool any = 5;
+	}
 }
