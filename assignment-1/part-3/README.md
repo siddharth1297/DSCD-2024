@@ -5,14 +5,29 @@
 #### Install
 $ sh ../install.sh; python -m pip install -r ../requirements.txt
 
-#### RabbitMQ commands(TODO: Make it for Linux) 
-brew services stop rabbitmq
-brew services start rabbitmq
+#### RabbitMQ commands (for mac) 
+brew services stop rabbitmq <br>
+brew services start rabbitmq <br>
 brew services info rabbitmq
 
-#### RabbitMQ credentials
-usname = guest
-passwrd = guest
+#### RabbitMQ credentials (for mac)
+usname = guest <br>
+passwrd = guest <br>
+
+### Install rabbitmq using following command for linux
+sudo apt install curl gnupg -y <br>
+sudo apt install rabbitmq-server -y <br>
+
+### RabbitMQ commands 
+sudo systemctl start rabbitmq-server <br>
+sudo systemctl status rabbitmq-server <br>
+sudo systemctl stop rabbitmq-server <br>
+
+### For gcloud do this steps to connect with the remote rabbitmq server at .
+#### change or add the file at rabbitmq-server /etc/rabbitmq/rabbitmq.conf by adding. <br>
+loopback_users = none
+
+#### Give the internal IP of the VM where rabbitmq is running.
 
 ## Design
 There are two dedicated queue for communication between the server-user and server-youtuber.

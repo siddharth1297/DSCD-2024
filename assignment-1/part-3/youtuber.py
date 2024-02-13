@@ -1,13 +1,14 @@
 import pika
 import sys
 
+R_MQ='10.128.0.8'
 class Youtuber:
     def __init__(self, youtuber_name, video_name):
         self.youtuber_name = youtuber_name
         self.video_name = video_name
 
     def publish_video(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(R_MQ))
         channel = connection.channel()
         channel.queue_declare(queue='youtuber_requests')
 

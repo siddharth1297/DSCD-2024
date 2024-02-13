@@ -1,5 +1,6 @@
 import pika
 import sys
+R_MQ='10.128.0.8'
 
 class User:
     def __init__(self, user_name, subscribe_action=None, youtuber_name=None):
@@ -8,7 +9,7 @@ class User:
         self.youtuber_name = youtuber_name
 
     def update_subscription(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(R_MQ))
         channel = connection.channel()
         channel.queue_declare(queue='user_requests')
 
