@@ -3,6 +3,23 @@ import socket
 import uuid
 import threading
 from datetime import datetime  
+import requests
+
+def get_external_ip():
+    metadata_server_url = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip"
+    headers = {"Metadata-Flavor": "Google"}
+
+    try:
+        response = requests.get(metadata_server_url, headers=headers)
+        if response.status_code == 200:
+            external_ip = response.text
+            return external_ip
+        else:
+            print("Failed to retrieve external IP:", response.status_code)
+            return None
+    except Exception as e:
+        print("Error occurred while retrieving external IP:", e)
+        return None 
 
 def store_string_with_timestamp(input_string, message_store):
 
@@ -30,7 +47,8 @@ clients=[]
 context = zmq.Context()
 
 # Get the group's IP
-group_ip = socket.gethostbyname(socket.gethostname())
+group_ip=get_external_ip() 
+#group_ip = socket.gethostbyname(socket.gethostname())
 # Create a new socket for potential sub-groups
 # group_socket = context.socket(zmq.REP)
 # group_port = group_socket.bind_to_random_port("tcp://*", min_port=1024, max_port=65535)
@@ -45,7 +63,7 @@ group_uuid = str(uuid.uuid1())
 # Socket to talk to server
 print("Connecting to message app server…")
 socket = context.socket(zmq.REQ)
-socket.connect("tcp://localhost:5555")
+socket.connect("tcp://34.16.102.214:5555")
 
 # Send the group's IP, server port, and UUID as a string
 group_info = f"GROUP:{group_ip}:{group_port}:{group_uuid}"
@@ -118,5 +136,4 @@ while True:
     
     # Send the response back to the client using its identity
     group_socket.send_multipart([client_identity, b"", response.encode('utf-8')])     
-
 

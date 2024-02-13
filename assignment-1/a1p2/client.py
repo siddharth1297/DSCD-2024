@@ -32,7 +32,7 @@ while(True):
         # Socket to talk to client
         print("Connecting to message app server…")
         socket = context.socket(zmq.REQ)
-        socket.connect("tcp://localhost:5555")
+        socket.connect("tcp://34.16.102.214:5555")
 
         # Send the client's UUID as a string
         client_info = f"CLIENT;{client_uuid}"

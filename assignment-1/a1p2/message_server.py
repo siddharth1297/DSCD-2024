@@ -9,6 +9,9 @@ groups = []
 socket = context.socket(zmq.REP)
 socket.bind("tcp://*:5555")
 
+#start here
+print("Message App Server is up and running............\n")
+
 def format_group_list(groups): 
     groups_string=""
     for i in range(len(groups)):
@@ -16,8 +19,6 @@ def format_group_list(groups):
     
     return groups_string    
 
-#start here
-print("Message App Server is up and running............\n")
 while True:
     # Wait for the next request from the group
     message = socket.recv_string()

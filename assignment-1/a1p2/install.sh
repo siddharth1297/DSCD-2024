@@ -2,7 +2,6 @@
 
 # Install Python dependencies using pip
 
-pip install pyzmq
-pip install uuid
-
+sudo apt install python3-zmq
+sudo apt install uuid
 
