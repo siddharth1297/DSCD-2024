@@ -1,14 +1,20 @@
 """
 Seller
 """
+import os
+import threading
+import time
 import logging
+from concurrent import futures
 import uuid
 import argparse
 from typing import List
 import grpc
 
-import market_service_pb2
+import google.protobuf
+import common_messages_pb2
 import market_service_pb2_grpc
+import client_service_pb2_grpc
 
 import market
 import util
@@ -16,14 +22,17 @@ from util import ItemCategory
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - [%(pathname)s:%(funcName)s:%(lineno)d] - %(message)s",
-    level=logging.DEBUG,
+    level=logging.INFO,
 )
 logger = logging.getLogger()
+
+
+MAX_WORKERS = 2
 
 CMD_MODE = True
 
 
-class SellerService:
+class SellerService(client_service_pb2_grpc.ClientServiceServicer):
     """Seller Services"""
 
     def __init__(self, seller, server_ip: str, server_port: int):
@@ -31,6 +40,30 @@ class SellerService:
         self.server_ip = server_ip
         self.server_port = str(server_port)
         self.server_address = server_ip + ":" + str(server_port)
+
+    def serve(self) -> None:
+        """start services"""
+        server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=MAX_WORKERS),
+            options=(("grpc.so_reuseport", 0),),
+        )
+        client_service_pb2_grpc.add_ClientServiceServicer_to_server(self, server)
+        server.add_insecure_port(self.server_ip + ":" + self.server_port)
+        server.start()
+        logger.info("Server started, listening on %s", self.server_port)
+        server.wait_for_termination()
+
+    def notifyClient(
+        self, request: common_messages_pb2.ItemDetails, context
+    ) -> google.protobuf.empty_pb2.Empty:
+        """
+        RPC notifyClient
+        """
+        logger.info(
+            "\nThe Following Item has been updated:\n%s",
+            market.Item.item_detils_to_item(request),
+        )
+        return google.protobuf.empty_pb2.Empty()
 
 
 class Seller:
@@ -46,12 +79,14 @@ class Seller:
         self.unique_id = str(uuid.uuid1())
         self.market_address = market_server_ip + ":" + str(market_server_port)
         self.servicer = SellerService(self, seller_server_ip, seller_server_port)
+        self.service_thread = threading.Thread(target=self.servicer.serve)
 
-    def start(self):
+    def start_service(self):
         """
         start seller service
         """
-        # TODO: Init service
+        self.service_thread.start()
+        time.sleep(2)
         if not self.__register():
             return False
         return True
@@ -62,17 +97,16 @@ class Seller:
         """
         request = None
         try:
-            request = market_service_pb2.ItemDetails(
+            request = common_messages_pb2.ItemDetails(
                 product_name=kwargs["product_name"],
                 quantity=kwargs["quantity"],
                 description=kwargs["description"],
                 price_per_unit=kwargs["price_per_unit"],
-                seller_details=market_service_pb2.ClientDetails(
+                seller_details=common_messages_pb2.ClientDetails(
                     address=self.servicer.server_address, unique_id=self.unique_id
                 ),
             )
             util.set_pb_msg_category(request, kwargs["category"])
-            # TODO: Add assert on category
         except KeyError as key_err:
             logger.error("Item details not provided. %s", key_err)
             return False
@@ -83,11 +117,67 @@ class Seller:
             stub = market_service_pb2_grpc.MarketServiceStub(channel)
             response = stub.sellItem(request)
             if response.status:
-                logger.info(
-                    "Seller sellItem SUCCESS, unique_item_id: %s", response.item_id
-                )
+                logger.info("SUCCESS, unique_item_id: %s", response.item_id)
             else:
-                logger.info("Seller sellItem FAIL")
+                logger.info("FAIL")
+            return response.status
+        return False
+
+    def update_item(self, **kwargs) -> bool:
+        """
+        Calls market to update the given item
+        """
+        request = None
+        try:
+            request = common_messages_pb2.ItemDetails(
+                item_id=kwargs["item_id"],
+                quantity=kwargs["quantity"],
+                price_per_unit=kwargs["price_per_unit"],
+                seller_details=common_messages_pb2.ClientDetails(
+                    address=self.servicer.server_address, unique_id=self.unique_id
+                ),
+            )
+        except KeyError as key_err:
+            logger.error("Item details not provided. %s", key_err)
+            return False
+
+        assert request is not None
+
+        with grpc.insecure_channel(self.market_address) as channel:
+            stub = market_service_pb2_grpc.MarketServiceStub(channel)
+            response = stub.updateItem(request)
+            if response.status:
+                logger.info("SUCCESS")
+            else:
+                logger.info("FAIL")
+            return response.status
+        return False
+
+    def delete_item(self, **kwargs) -> bool:
+        """
+        Calls market to delete the given item
+        """
+        request = None
+        try:
+            request = common_messages_pb2.ItemDetails(
+                item_id=kwargs["item_id"],
+                seller_details=common_messages_pb2.ClientDetails(
+                    address=self.servicer.server_address, unique_id=self.unique_id
+                ),
+            )
+        except KeyError as key_err:
+            logger.error("Item details not provided. %s", key_err)
+            return False
+
+        assert request is not None
+
+        with grpc.insecure_channel(self.market_address) as channel:
+            stub = market_service_pb2_grpc.MarketServiceStub(channel)
+            response = stub.deleteItem(request)
+            if response.status:
+                logger.info("SUCCESS")
+            else:
+                logger.info("FAIL")
             return response.status
         return False
 
@@ -95,16 +185,14 @@ class Seller:
         """
         Calls market to get all the items sold by this seller
         """
-        request = market_service_pb2.ClientDetails(
+        request = common_messages_pb2.ClientDetails(
             address=self.servicer.server_address, unique_id=self.unique_id
         )
         with grpc.insecure_channel(self.market_address) as channel:
             stub = market_service_pb2_grpc.MarketServiceStub(channel)
             response = stub.displaySellerItems(request)
             items = list(map(market.Item.item_detils_to_item, response.items))
-            logger.info(
-                "Seller Items %s", "\n-\n{}".format("\n-\n".join(map(str, items)))
-            )
+            logger.info("Items %s", "\n-\n{}".format("\n-\n".join(map(str, items))))
             return items
         return []
 
@@ -113,7 +201,7 @@ class Seller:
         Register at the market
         """
         with grpc.insecure_channel(self.market_address) as channel:
-            request = market_service_pb2.ClientDetails(
+            request = common_messages_pb2.ClientDetails(
                 address=self.servicer.server_address, unique_id=self.unique_id
             )
             stub = market_service_pb2_grpc.MarketServiceStub(channel)
@@ -149,18 +237,22 @@ class Dialogue:
             return ItemCategory.ELECTRONICS
         if cat == 2:
             return ItemCategory.FASHION
-        return ItemCategory.OTHERS
+        if cat == 3:
+            return ItemCategory.OTHERS
+        return ItemCategory.ANY
 
     def start(self):
         """
         Start process
         """
-        if not self.seller.start():
+        if not self.seller.start_service():
             return
         while True:
             cmd = input(
-                "\nEnter 0-Exit 1-SellItem 2-UpdateItem 3-DeleteItem 4-DisplaySellerItem: "
+                "\nEnter cls-Clear 0-Exit 1-SellItem 2-UpdateItem 3-DeleteItem 4-DisplaySellerItem: "
             )
+            if cmd == "cls":
+                os.system("clear")
             if not cmd.isdigit():
                 continue
             cmd = int(cmd)
@@ -169,9 +261,9 @@ class Dialogue:
 
             if cmd == 1:
                 product_name = input("product_name: ")
-                ip_category = input(
-                    "category (1-ELECTRONICS 2-FASHION 3-OTHERS): "
-                )
+                if product_name == "":
+                    continue
+                ip_category = input("category (1-ELECTRONICS 2-FASHION 3-OTHERS): ")
                 if not ip_category.isdigit():
                     continue
                 category = Dialogue.to_category(int(ip_category))
@@ -181,16 +273,11 @@ class Dialogue:
                 if not qty.isdigit():
                     continue
                 qty = int(qty)
-                if qty < 0:
-                    continue
                 desc = input("description: ")
                 ppu = input("price_per_unit: ")
-                
-                if not ppu.isdigit():
+                if not util.is_float(ppu):
                     continue
                 ppu = float(ppu)
-                if ppu < 0:
-                    continue
                 self.seller.sell_item(
                     product_name=product_name,
                     quantity=qty,
@@ -198,8 +285,33 @@ class Dialogue:
                     price_per_unit=ppu,
                     category=category,
                 )
+            if cmd == 2:
+                item_id = input("item_id: ")
+                if not item_id.isdigit():
+                    continue
+                item_id = int(item_id)
+                qty = input("quantity: ")
+                if not qty.isdigit():
+                    continue
+                qty = int(qty)
+                ppu = input("price_per_unit: ")
+                if not util.is_float(ppu):
+                    continue
+                ppu = float(ppu)
+                self.seller.update_item(
+                    item_id=item_id,
+                    quantity=qty,
+                    price_per_unit=ppu,
+                )
+            if cmd == 3:
+                item_id = input("item_id: ")
+                if not item_id.isdigit():
+                    continue
+                item_id = int(item_id)
+                self.seller.delete_item(item_id=item_id)
             if cmd == 4:
                 self.seller.display_sellers_items()
+
 
 def main(
     seller_server_ip: str,
@@ -219,8 +331,8 @@ def main(
     seller = Seller(
         seller_server_ip, seller_server_port, market_server_ip, market_server_port
     )
-    assert seller.start()
-    assert not seller.start()
+    assert seller.start_service()
+    assert not seller.start_service()
 
     seller.display_sellers_items()
     assert seller.sell_item(
@@ -251,15 +363,15 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="seller for Online Shopping Platform",
-        epilog="$ python3 seller.py --ip 0.0.0.0 --port 8090 --sip 0.0.0.0 --sport 8085",
+        epilog="$ python3 seller.py --ip 0.0.0.0 --port 8090 --mip 0.0.0.0 --mport 8085",
     )
     parser.add_argument("-i", "--ip", help="seller server ip", required=True)
     parser.add_argument(
         "-p", "--port", help="seller server port", required=True, type=int
     )
-    parser.add_argument("-si", "--sip", help="market server ip", required=True)
+    parser.add_argument("-si", "--mip", help="market server ip", required=True)
     parser.add_argument(
-        "-sp", "--sport", help="market server port", required=True, type=int
+        "-sp", "--mport", help="market server port", required=True, type=int
     )
     args = parser.parse_args()
-    main(args.ip, args.port, args.sip, args.sport)
+    main(args.ip, args.port, args.mip, args.mport)

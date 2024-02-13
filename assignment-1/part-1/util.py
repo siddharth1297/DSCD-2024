@@ -38,6 +38,17 @@ def set_pb_msg_category(request, category: ItemCategory) -> None:
     elif category == ItemCategory.FASHION:
         request.fashion = True
     elif category == ItemCategory.OTHERS:
-        request.other = True
+        request.others = True
     else:
         request.any = True
+
+
+def is_float(val: str) -> bool:
+    """
+    Checks if the value is float or not
+    """
+    try:
+        float(val)
+    except ValueError:
+        return False
+    return True

@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-//package market_services;
+import "common_messages.proto";
+
+package shopping_platform;
 
 service MarketService {
 	rpc registerSeller(ClientDetails) returns (BooleanResponse) {}
@@ -8,42 +10,26 @@ service MarketService {
 	rpc updateItem(ItemDetails) returns (ItemOpResp) {}
 	rpc deleteItem(ItemDetails) returns (ItemOpResp) {}
 	rpc displaySellerItems(ClientDetails) returns (ItemsList) {}
-
+	
 	rpc searchItem(SearchItemReq) returns (ItemsList) {}
-}
-
-message ClientDetails {
-	string address = 1;
-	string unique_id = 2;
+	rpc buyItem(BuyerItemOpReq) returns (ItemOpResp) {}
+	rpc addToWishList(BuyerItemOpReq) returns (ItemOpResp) {}
+	rpc rateItem(BuyerItemOpReq) returns (ItemOpResp) {}
 }
 
 message BooleanResponse {
-	bool status = 1;
-}
-
-// "optional" is not specified explicitely, but depends on the functions, producing and consuming the messages.
-message ItemDetails {
-	int32 item_id = 1;
-	string product_name = 2;
-	oneof category {
-		bool electronics = 3;
-		bool fashion = 4;
-		bool others = 5;
-	}
-	int32 quantity = 6;
-	string description = 7;
-	float price_per_unit = 8;
-	ClientDetails seller_details = 9;
-	float rating = 10;
+        bool status = 1;
 }
 
 message ItemsList {
 	repeated ItemDetails items = 1;
 }
+
 // Item operation Response
 message ItemOpResp {
 	bool status = 1;
 	optional int32 item_id = 2;
+	optional string error = 3;
 }
 
 message SearchItemReq {
@@ -54,4 +40,11 @@ message SearchItemReq {
                 bool others = 4;
 		bool any = 5;
 	}
+}
+
+message BuyerItemOpReq {
+	int32 item_id = 1;
+	ClientDetails buyer_details = 2;
+	optional int32 quantity = 3;
+	optional int32 rating = 4;
 }
