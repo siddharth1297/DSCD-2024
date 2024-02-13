@@ -6,6 +6,7 @@ from typing import List
 import argparse
 import logging
 from concurrent import futures
+from threading import Lock
 from typing_extensions import Self
 import grpc
 
@@ -188,6 +189,7 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
         self.server_ip = server_ip
         self.server_port = server_port
         self.market = market
+        self.mutex = Lock()
 
     def serve(self):
         """
@@ -205,25 +207,27 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
     ) -> market_service_pb2.BooleanResponse:
         """RPC RegisterClient"""
         client = Client(request.address, request.unique_id, ClientType.SELLER)
-        res = self.market.register_seller(client)
+        with self.mutex:
+            res = self.market.register_seller(client)
         return market_service_pb2.BooleanResponse(status=res)
 
     def sellItem(
         self, request: common_messages_pb2.ItemDetails, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC SellItem"""
-        status, item_id = self.market.sell_item(
-            product_name=request.product_name,
-            category=util.item_category(request),
-            quantity=request.quantity,
-            description=request.description,
-            price_per_unit=request.price_per_unit,
-            seller=Client(
-                request.seller_details.address,
-                request.seller_details.unique_id,
-                ClientType.SELLER,
-            ),
-        )
+        with self.mutex:
+            status, item_id = self.market.sell_item(
+                product_name=request.product_name,
+                category=util.item_category(request),
+                quantity=request.quantity,
+                description=request.description,
+                price_per_unit=request.price_per_unit,
+                seller=Client(
+                    request.seller_details.address,
+                    request.seller_details.unique_id,
+                    ClientType.SELLER,
+                ),
+            )
         return (
             market_service_pb2.ItemOpResp(status=status, item_id=item_id)
             if status
@@ -234,43 +238,46 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
         self, request: common_messages_pb2.ItemDetails, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC UpdateItem"""
-        status = self.market.update_item(
-            item_id=request.item_id,
-            quantity=request.quantity,
-            price_per_unit=request.price_per_unit,
-            seller=Client(
-                request.seller_details.address,
-                request.seller_details.unique_id,
-                ClientType.SELLER,
-            ),
-        )
+        with self.mutex:
+            status = self.market.update_item(
+                item_id=request.item_id,
+                quantity=request.quantity,
+                price_per_unit=request.price_per_unit,
+                seller=Client(
+                    request.seller_details.address,
+                    request.seller_details.unique_id,
+                    ClientType.SELLER,
+                ),
+            )
         return market_service_pb2.ItemOpResp(status=status)
 
     def deleteItem(
         self, request: common_messages_pb2.ItemDetails, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC DeleteItem"""
-        status = self.market.delete_item(
-            item_id=request.item_id,
-            seller=Client(
-                request.seller_details.address,
-                request.seller_details.unique_id,
-                ClientType.SELLER,
-            ),
-        )
+        with self.mutex:
+            status = self.market.delete_item(
+                item_id=request.item_id,
+                seller=Client(
+                    request.seller_details.address,
+                    request.seller_details.unique_id,
+                    ClientType.SELLER,
+                ),
+            )
         return market_service_pb2.ItemOpResp(status=status)
 
     def displaySellerItems(
         self, request: common_messages_pb2.ClientDetails, context
     ) -> market_service_pb2.ItemsList:
         """RPC DisplaySellerItems"""
-        items = self.market.seller_items(
-            seller=Client(
-                request.address,
-                request.unique_id,
-                ClientType.SELLER,
-            ),
-        )
+        with self.mutex:
+            items = self.market.seller_items(
+                seller=Client(
+                    request.address,
+                    request.unique_id,
+                    ClientType.SELLER,
+                ),
+            )
         return market_service_pb2.ItemsList(
             items=list(map(Item.item_to_item_details, items))
         )
@@ -279,9 +286,10 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
         self, request: market_service_pb2.SearchItemReq, context
     ) -> market_service_pb2.ItemsList:
         """RPC SearchItem"""
-        items = self.market.search_items(
-            product_name=request.product_name, category=util.item_category(request)
-        )
+        with self.mutex:
+            items = self.market.search_items(
+                product_name=request.product_name, category=util.item_category(request)
+            )
         return market_service_pb2.ItemsList(
             items=list(map(Item.item_to_item_details, items))
         )
@@ -290,32 +298,35 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
         self, request: market_service_pb2.BuyerItemOpReq, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC BuyItem"""
-        status = self.market.buy_item(
-            item_id=request.item_id,
-            quantity=request.quantity,
-            buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
-        )
+        with self.mutex:
+            status = self.market.buy_item(
+                item_id=request.item_id,
+                quantity=request.quantity,
+                buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
+            )
         return market_service_pb2.ItemOpResp(status=status)
 
     def addToWishList(
         self, request: market_service_pb2.BuyerItemOpReq, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC AddToWishList"""
-        status = self.market.add_to_wish_list(
-            item_id=request.item_id,
-            buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
-        )
+        with self.mutex:
+            status = self.market.add_to_wish_list(
+                item_id=request.item_id,
+                buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
+            )
         return market_service_pb2.ItemOpResp(status=status)
 
     def rateItem(
         self, request: market_service_pb2.BuyerItemOpReq, context
     ) -> market_service_pb2.ItemOpResp:
         """RPC RateItem"""
-        status = self.market.rate_item(
-            item_id=request.item_id,
-            rating=request.rating,
-            buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
-        )
+        with self.mutex:
+            status = self.market.rate_item(
+                item_id=request.item_id,
+                rating=request.rating,
+                buyer=Client(request.buyer_details.address, "", ClientType.BUYER),
+            )
         return market_service_pb2.ItemOpResp(status=status)
 
 
@@ -365,7 +376,7 @@ class Market:
             or kwargs["category"] == ItemCategory.ANY
         ):
             logger.error(
-                    "Sell Item request from %s Invalid items details. name: %s, quantity: %s, price: %s, category: %s",
+                "Sell Item request from %s Invalid items details. name: %s, quantity: %s, price: %s, category: %s",
                 seller,
                 kwargs["product_name"],
                 kwargs["quantity"],
