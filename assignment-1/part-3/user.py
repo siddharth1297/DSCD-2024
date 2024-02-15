@@ -26,7 +26,7 @@ class User:
 
 
     def start_receiving_notifications(self):
-        connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(R_MQ))
         channel = connection.channel()
         channel.queue_declare(queue=self.user_name)
 

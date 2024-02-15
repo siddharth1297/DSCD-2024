@@ -1,8 +1,9 @@
 import pika
 
+R_MQ='10.128.0.8'
 class YouTubeServer:
     def __init__(self):
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+        self.connection = pika.BlockingConnection(pika.ConnectionParameters(R_MQ))
         self.channel = self.connection.channel()
         self.channel.queue_declare(queue='user_requests')
         self.channel.queue_declare(queue='youtuber_requests')
