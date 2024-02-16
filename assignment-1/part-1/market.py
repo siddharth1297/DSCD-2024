@@ -1,6 +1,7 @@
 """
 Central Platform
 """
+
 import enum
 from typing import List
 import argparse
@@ -185,8 +186,7 @@ class Item:
 class MarketService(market_service_pb2_grpc.MarketServiceServicer):
     """Market Services for client"""
 
-    def __init__(self, server_ip: str, server_port: str, market):
-        self.server_ip = server_ip
+    def __init__(self, server_port: str, market):
         self.server_port = server_port
         self.market = market
         self.mutex = Lock()
@@ -197,7 +197,7 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
         """
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=MAX_WORKERS))
         market_service_pb2_grpc.add_MarketServiceServicer_to_server(self, server)
-        server.add_insecure_port(self.server_ip + ":" + self.server_port)
+        server.add_insecure_port("0.0.0.0" + ":" + self.server_port)
         server.start()
         logger.info("Server started, listening on %s", self.server_port)
         server.wait_for_termination()
@@ -333,8 +333,8 @@ class MarketService(market_service_pb2_grpc.MarketServiceServicer):
 class Market:
     """Market(Cental Platform)"""
 
-    def __init__(self, server_ip: str, server_port: int):
-        self.servicer = MarketService(server_ip, str(server_port), self)
+    def __init__(self, server_port: int):
+        self.servicer = MarketService(str(server_port), self)
         self.sellers = []
         self.unique_item_id_cnt = 1
         self.items_dict = {}
@@ -684,18 +684,17 @@ class Market:
                 logger.error("Client %s not available.", client)
 
 
-def main(server_ip: str, server_port: int) -> None:
+def main(server_port: int) -> None:
     """main"""
-    market = Market(server_ip, server_port)
+    market = Market(server_port)
     market.serve()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="central platform for Online Shopping Platform",
-        epilog="$ python3 market.py --ip 0.0.0.0 --port 8085",
+        epilog="$ python3 market.py --port 8085",
     )
-    parser.add_argument("-i", "--ip", help="server ip", required=True)
     parser.add_argument("-p", "--port", help="server port", required=True, type=int)
     args = parser.parse_args()
-    main(args.ip, args.port)
+    main(args.port)

@@ -15,3 +15,11 @@ $ python3 seller.py -h
 ```
 
 ## Design
+#### market
+Market class is the main class that implements the functionality according to the document.
+MarketService class is responsible for handling the RPCs and convert parameters to the local format.
+Push based notification.
+
+### Client
+Similarly, the class Buyer/Seller implements the functionality according to the document.
+BuyerService/SellerService is responsible for handling the notifications

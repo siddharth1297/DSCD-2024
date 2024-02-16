@@ -1,6 +1,7 @@
 """
 Seller
 """
+
 import os
 import threading
 import time
@@ -48,7 +49,7 @@ class SellerService(client_service_pb2_grpc.ClientServiceServicer):
             options=(("grpc.so_reuseport", 0),),
         )
         client_service_pb2_grpc.add_ClientServiceServicer_to_server(self, server)
-        server.add_insecure_port(self.server_ip + ":" + self.server_port)
+        server.add_insecure_port("0.0.0.0" + ":" + self.server_port)
         server.start()
         logger.info("Server started, listening on %s", self.server_port)
         server.wait_for_termination()
@@ -363,7 +364,7 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="seller for Online Shopping Platform",
-        epilog="$ python3 seller.py --ip 0.0.0.0 --port 8090 --mip 0.0.0.0 --mport 8085",
+        epilog="$ python3 seller.py --ip 127.0.0.1 --port 8090 --mip 127.0.0.1 --mport 8085",
     )
     parser.add_argument("-i", "--ip", help="seller server ip", required=True)
     parser.add_argument(

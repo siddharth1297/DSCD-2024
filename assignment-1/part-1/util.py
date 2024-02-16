@@ -1,6 +1,7 @@
 """
 UTIL: Common and helper function
 """
+
 import enum
 
 
