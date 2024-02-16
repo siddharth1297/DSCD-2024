@@ -76,7 +76,7 @@ class Item:
         def __init__(self, **kwargs):
             self.rating = None
             self.raters = set()
-            if "rating" in kwargs:
+            if "rating" in kwargs and kwargs["rating"] > 0:
                 self.rating = kwargs["rating"]
 
         def __str__(self):
