@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "common_messages.proto";
+
+package shopping_platform;
+
+service ClientService {
+	rpc notifyClient(ItemDetails) returns(google.protobuf.Empty) {}
+}

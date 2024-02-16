@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package shopping_platform;
+
+message ClientDetails {
+	string address = 1;
+	string unique_id = 2;
+}
+
+// "optional" is not specified explicitely, but depends on the functions, producing and consuming the messages.
+message ItemDetails {
+	int32 item_id = 1;
+	string product_name = 2;
+	oneof category {
+		bool electronics = 3;
+		bool fashion = 4;
+		bool others = 5;
+	}
+	int32 quantity = 6;
+	string description = 7;
+	float price_per_unit = 8;
+	ClientDetails seller_details = 9;
+	float rating = 10;
+}
