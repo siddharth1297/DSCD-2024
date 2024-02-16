@@ -1,6 +1,8 @@
 
 # Part 2 : Messaging App using zeromq 
 
+## Author: Arjun Temura 
+
 ## **Simulates a zeromq based messaging service where multiple clients simultaneously interact within groups to exchange text messages. A single message appserver manages the groups available to the clients.**
  
 1) Message app server: message_server.py (on gcloud vm)  
