@@ -1,5 +1,5 @@
 
-*Simulates a zeromq based messaging service where multiple clients simultaneously interact within groups to exchange text messages. A single message appserver manages the groups available to the clients.*
+##Simulates a zeromq based messaging service where multiple clients simultaneously interact within groups to exchange text messages. A single message appserver manages the groups available to the clients.
  
 1) Message app server: message_server.py (on gcloud vm)  
     
@@ -7,10 +7,10 @@
    
 3) Client server: client.py (on localhost) 
    
-*Install Dependencies:* 
+###**Install Dependencies:** 
 $ ./install.sh 
 
-*Run:* 
+###**Run:** 
 $ python3 message_server.py
 $ python3 group.py 
 $ python3 client.py
