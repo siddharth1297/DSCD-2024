@@ -10,9 +10,16 @@
 3) Client server: client.py (on localhost) 
    
 ### **Install Dependencies:** 
+```
+
 $ ./install.sh 
 
+```
 ### **Run:** 
+```
+
 $ python3 message_server.py
 $ python3 group.py 
 $ python3 client.py
+
+```
