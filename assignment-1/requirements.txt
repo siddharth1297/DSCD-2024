@@ -1,3 +1,5 @@
 grpcio
 grpcio-tools
 typing_extensions
+zmq
+pikka
