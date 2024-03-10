@@ -172,3 +172,6 @@ cython_debug/
 
 # Built Visual Studio Code Extensions
 *.vsix
+
+# Assignment-2 logs file
+assignment-2/logs_node_*
