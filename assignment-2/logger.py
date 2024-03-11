@@ -51,7 +51,7 @@ def setup_logger(name, log_file, level):
 def set_logger(logs_dir: str, level):
     """Sets logger"""
     create_logs_dir(logs_dir)
-    # pylint: disable=W0603
+    # pylint: disable=global-statement
     global LOGS_LOGGER, METADATA_LOGGER, DUMP_LOGGER
     LOGS_LOGGER = setup_logger("logs", logs_dir + "logs.txt", level)
     METADATA_LOGGER = setup_logger("metadata", logs_dir + "metadata.txt", level)

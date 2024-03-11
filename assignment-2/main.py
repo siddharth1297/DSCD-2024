@@ -3,16 +3,32 @@ main entry point
 """
 import argparse
 import logging
+import sys
 import typing
+import signal
 import yaml
 import logger
+import raft
 
 LOGGING_LEVEL = logging.INFO
+
+RF = None
+
+
+def signal_handler(_sig, _frame):
+    """Signal handler to close the app"""
+    RF.stop()
+    sys.exit(0)
 
 
 def main(node_id: int, cluster: typing.Dict[int, str]) -> None:
     """main"""
     logger.set_logger(f"logs_node_{node_id}/", LOGGING_LEVEL)
+    # pylint: disable=global-statement
+    global RF
+    RF = raft.Raft(node_id, list(cluster["cluster"].values()))
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.pause()
 
 
 if __name__ == "__main__":
