@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"\x11\n\x0fRequestVoteArgs\"\x12\n\x10RequestVoteReply\"\x13\n\x11\x41ppendEntriesArgs\"\x14\n\x12\x41ppendEntriesReply2\x8f\x01\n\x0bRaftService\x12\x42\n\rAppendEntries\x12\x17.raft.AppendEntriesArgs\x1a\x18.raft.AppendEntriesReply\x12<\n\x0bRequestVote\x12\x15.raft.RequestVoteArgs\x1a\x16.raft.RequestVoteReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nraft.proto\x12\x04raft\"~\n\x0fRequestVoteArgs\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x13\n\x0b\x63\x61ndidateId\x18\x02 \x01(\x05\x12\x14\n\x0clastLogIndex\x18\x03 \x01(\x05\x12\x13\n\x0blastLogTerm\x18\x04 \x01(\x05\x12\x1d\n\x15leaseIntervalDuration\x18\x05 \x01(\x05\"U\n\x10RequestVoteReply\x12\x0c\n\x04term\x18\x01 \x01(\x05\x12\x13\n\x0bvoteGranted\x18\x02 \x01(\x08\x12\x1e\n\x16leaseRemainingDuration\x18\x03 \x01(\x05\"\x13\n\x11\x41ppendEntriesArgs\"\x14\n\x12\x41ppendEntriesReply2\x8f\x01\n\x0bRaftService\x12\x42\n\rAppendEntries\x12\x17.raft.AppendEntriesArgs\x1a\x18.raft.AppendEntriesReply\x12<\n\x0bRequestVote\x12\x15.raft.RequestVoteArgs\x1a\x16.raft.RequestVoteReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,13 +22,13 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'raft_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_REQUESTVOTEARGS']._serialized_start=20
-  _globals['_REQUESTVOTEARGS']._serialized_end=37
-  _globals['_REQUESTVOTEREPLY']._serialized_start=39
-  _globals['_REQUESTVOTEREPLY']._serialized_end=57
-  _globals['_APPENDENTRIESARGS']._serialized_start=59
-  _globals['_APPENDENTRIESARGS']._serialized_end=78
-  _globals['_APPENDENTRIESREPLY']._serialized_start=80
-  _globals['_APPENDENTRIESREPLY']._serialized_end=100
-  _globals['_RAFTSERVICE']._serialized_start=103
-  _globals['_RAFTSERVICE']._serialized_end=246
+  _globals['_REQUESTVOTEARGS']._serialized_end=146
+  _globals['_REQUESTVOTEREPLY']._serialized_start=148
+  _globals['_REQUESTVOTEREPLY']._serialized_end=233
+  _globals['_APPENDENTRIESARGS']._serialized_start=235
+  _globals['_APPENDENTRIESARGS']._serialized_end=254
+  _globals['_APPENDENTRIESREPLY']._serialized_start=256
+  _globals['_APPENDENTRIESREPLY']._serialized_end=276
+  _globals['_RAFTSERVICE']._serialized_start=279
+  _globals['_RAFTSERVICE']._serialized_end=422
 # @@protoc_insertion_point(module_scope)
