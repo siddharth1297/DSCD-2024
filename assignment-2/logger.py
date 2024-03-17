@@ -35,9 +35,10 @@ def __create_logs_dir(logs_dir: str):
         pass
 
 
-def __setup_logger(name, log_file, level):
+def __setup_logger(name, log_file, prefix, level):
     """To setup as many loggers as you want"""
 
+    # __FORMATTER._fmt = __FORMATTER._fmt + " " + prefix
     handler = __logging.FileHandler(log_file)
     handler.setFormatter(__FORMATTER)
 
@@ -48,11 +49,13 @@ def __setup_logger(name, log_file, level):
     return logger
 
 
-def set_logger(logs_dir: str, level):
+def set_logger(logs_dir: str, prefix: str, level):
     """Sets logger"""
     __create_logs_dir(logs_dir)
     # pylint: disable=global-statement
     global LOGS_LOGGER, METADATA_LOGGER, DUMP_LOGGER
-    LOGS_LOGGER = __setup_logger("logs", logs_dir + "logs.txt", level)
-    METADATA_LOGGER = __setup_logger("metadata", logs_dir + "metadata.txt", level)
-    DUMP_LOGGER = __setup_logger("dump", logs_dir + "dump.txt", level)
+    LOGS_LOGGER = __setup_logger("logs", logs_dir + "logs.txt", prefix, level)
+    METADATA_LOGGER = __setup_logger(
+        "metadata", logs_dir + "metadata.txt", prefix, level
+    )
+    DUMP_LOGGER = __setup_logger("dump", logs_dir + "dump.txt", prefix, level)

@@ -12,8 +12,6 @@ message RequestVoteArgs {
     int32 candidateId = 2;
     int32 lastLogIndex = 3;
     int32 lastLogTerm = 4;
-
-    int32 leaseIntervalDuration = 5;
 }
 
 message RequestVoteReply {
@@ -24,7 +22,17 @@ message RequestVoteReply {
 }
 
 message AppendEntriesArgs {
+    int32 term = 1;
+    int32 leaderId = 2;
+    int32 prevLogIndex = 3;
+    int32 prevLogTerm = 4;
+    repeated string entries = 5;
+    int32 leaderCommit = 6;
+    
+    int32 leaseRemainingDuration = 7;
 }
 
 message AppendEntriesReply {
+    int32 term = 1;
+    bool success = 2;
 }
