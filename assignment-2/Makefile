@@ -1,12 +1,12 @@
 PROTO_OUT=./
 
-SRC = main.py logger.py raft.py util.py
+SRC = main.py logger.py raft.py util.py kvserver.py client.py
 
 PYLINT_IGNORE=
 
 protoc:
 	python3 -m grpc_tools.protoc -I./protos --python_out=$(PROTO_OUT) --grpc_python_out=$(PROTO_OUT) \
-		./protos/raft.proto
+		./protos/raft.proto ./protos/kv.proto
 
 clean-protoc:
 	rm -f $(PROTO_OUT)*_pb2.py $(PROTO_OUT)*_pb2_grpc.py

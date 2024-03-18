@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package KV;
+
+service KVService {
+    rpc Put(PutArgs) returns (PutReply);
+    rpc Get(GetArgs) returns (GetReply);
+    rpc GetLeader(GetLeaderArgs) returns (GetLeaderReply);
+}
+
+message PutArgs {
+    string key = 1;
+    string value = 2;
+}
+
+message PutReply {
+    bool status = 1;
+    string error = 2;
+    int32 leaderId = 3;
+}
+
+message GetArgs {
+    string key = 1;
+}
+
+message GetReply {
+    string status = 1;
+    string value = 2;
+    string error = 3;
+    int32 leaderId = 4;
+}
+
+message GetLeaderArgs {
+
+}
+
+message GetLeaderReply {
+    int32 leaderId = 1;
+    string error = 2;
+}

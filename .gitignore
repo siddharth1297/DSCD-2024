@@ -175,3 +175,4 @@ cython_debug/
 
 # Assignment-2 logs file
 assignment-2/logs_node_*
+assignment-2/*.tmp

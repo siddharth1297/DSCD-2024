@@ -1,6 +1,7 @@
 """
 main entry point
 """
+# pylint: disable=redefined-outer-name, global-statement
 import os
 import argparse
 import logging
@@ -9,26 +10,41 @@ import typing
 import signal
 import yaml
 import logger
+import util
+
 import raft
+import kvserver
 
 LOGGING_LEVEL = logging.DEBUG
 
 RF = None
+KV = None
 
 
 def signal_handler(_sig, _frame):
     """Signal handler to close the app"""
+    KV.stop()
     RF.stop()
     sys.exit(0)
 
 
-def main(node_id: int, cluster: typing.Dict[int, str]) -> None:
+def main(
+    node_id: int, raft_cluster: typing.Dict[int, str], kv_cluster: typing.Dict[int, str]
+) -> None:
     """main"""
-    logger.set_logger(f"logs_node_{node_id}/", "Node: " + str(node_id), LOGGING_LEVEL)
-    # pylint: disable=global-statement
-    logger.DUMP_LOGGER.info("ProcessId %s", os.getpid())
-    global RF
-    RF = raft.Raft(node_id, list(cluster["cluster"].values()))
+    logger.set_logger(f"logs_node_{node_id}/", f"Node-{str(node_id)}", LOGGING_LEVEL)
+    logger.DUMP_LOGGER.info(
+        "NodeId %s ProcessId %s Raft %s KV %s",
+        node_id,
+        os.getpid(),
+        raft_cluster[node_id],
+        kv_cluster[node_id],
+    )
+    global RF, KV
+    KV = kvserver.KVServer(node_id, raft_cluster, kv_cluster)
+    RF = raft.Raft(node_id, raft_cluster, KV)
+    KV.set_state_machine(RF)
+    KV.start()
     signal.signal(signal.SIGINT, signal_handler)
     signal.pause()
 
@@ -45,4 +61,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.config, "r", encoding="UTF-8") as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
-    main(args.id, config)
+        raft_cluster, kv_cluster = util.clusters_from_config(config)
+    main(args.id, raft_cluster, kv_cluster)

@@ -10,8 +10,10 @@ LOGS_LOGGER = None
 METADATA_LOGGER = None
 DUMP_LOGGER = None
 
+# pylint: disable=line-too-long
 __FORMATTER = __logging.Formatter(
-    "%(asctime)s-%(levelname)s-[%(pathname)s:%(funcName)s:%(lineno)d] -- %(message)s"
+    "%(asctime)s.%(msecs)03d %(levelname)s [%(filename)s:%(funcName)s:%(lineno)d] [%(node)s] -- %(message)s",
+    "%H:%M:%S",
 )
 
 
@@ -38,7 +40,6 @@ def __create_logs_dir(logs_dir: str):
 def __setup_logger(name, log_file, prefix, level):
     """To setup as many loggers as you want"""
 
-    # __FORMATTER._fmt = __FORMATTER._fmt + " " + prefix
     handler = __logging.FileHandler(log_file)
     handler.setFormatter(__FORMATTER)
 
@@ -46,6 +47,7 @@ def __setup_logger(name, log_file, prefix, level):
     logger.setLevel(level)
     logger.addHandler(handler)
 
+    logger = __logging.LoggerAdapter(logger, extra={"node": prefix})
     return logger
 
 
