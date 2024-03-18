@@ -9,6 +9,7 @@ import kv_pb2_grpc
 
 import logger
 import raft
+import command
 
 MAX_WORKERS = 2
 
@@ -56,7 +57,8 @@ class KVServer:
 
     def Put(self, request: kv_pb2.PutArgs, context) -> kv_pb2.PutReply:
         """KV Put RPC"""
-        return kv_pb2.PutReply()
+        cmd = command.Command(command.CommandType.SET)
+        return kv_pb2.PutReply(cmd)
 
     def Get(self, request: kv_pb2.GetArgs, context) -> kv_pb2.GetReply:
         """KV Get RPC"""

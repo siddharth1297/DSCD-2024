@@ -1,6 +1,6 @@
 PROTO_OUT=./
 
-SRC = main.py logger.py raft.py util.py kvserver.py client.py
+SRC = main.py logger.py raft.py util.py kvserver.py client.py command.py
 
 PYLINT_IGNORE=
 
