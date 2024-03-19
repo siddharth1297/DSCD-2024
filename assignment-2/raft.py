@@ -121,15 +121,15 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         with self.mutex:
             if self.state == State.LEADER:
                 # TODO: Add Lease
+                cmd.set_term(self.currentTerm)
                 return (*self.__append_entry(cmd), True)
         return (-1, -1, False)
 
     def __append_entry(self, cmd: command.Command) -> typing.Tuple[int, int]:
         """Appends command to log and returns log index and term number"""
-        self.logs.append(command)
+        self.logs.append(cmd)
         term = self.currentTerm
         index = len(self.logs) - 1
-        cmd.set_term(term)
         logger.DUMP_LOGGER.info(
             "Appended command [%s] at index %s term %s", cmd, index, term
         )
@@ -227,8 +227,10 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         logger.DUMP_LOGGER.info(
             "Node %s became the leader for term %s.", self.my_id, self.currentTerm
         )
-        self.__append_entry(command.Command(command.CommandType.NOOP))
         self.nextIndex = [len(self.logs)] * len(self.peers)
+        self.__append_entry(
+            command.Command(command.CommandType.NOOP, self.currentTerm)
+        )
         # self.matchIndex =  TODO: Set it
         self.__send_heartbeat()
         # if not self.__renew_lease(util.current_time_second()):
@@ -382,12 +384,14 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self, request: raft_pb2.AppendEntriesArgs, context
     ) -> raft_pb2.AppendEntriesReply:
         """RPC AppendEntries"""
-        logger.DUMP_LOGGER.info("APPENDENTRIES======")
+        
         with self.mutex:
             reply = raft_pb2.AppendEntriesReply(
-                term=self.currentTerm, success=False, conflictIndex=-1, conflictTerm=-1
+                term=self.currentTerm, success=True, conflictIndex=-1, conflictTerm=-1
             )
             if self.currentTerm > request.term:
+                reply.success = False
+                reply.term = self.currentTerm
                 return reply
 
             if self.state == State.CANDIDATE:
@@ -399,46 +403,49 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.__update_timer(self.__election_timeout())
 
             logger.DUMP_LOGGER.info(
-                "prevLogindex: %s term: %s", request.prevLogIndex, request.prevLogTerm
+                "Request prevLogindex: %s term: %s", request.prevLogIndex, request.prevLogTerm
             )
-            if request.prevLogIndex != -1 and request.prevLogTerm != -1:
-                # TODO: Remove the above condition after implementing lease
-                # 2. Reply false if log doesn’t contain an entry at prevLogIndex
-                #  whose term matches prevLogTerm (§5.3)
-                if len(self.logs) <= request.prevLogIndex:
-                    reply.conflictIndex = len(self.logs)
-                elif self.logs[request.prevLogIndex].term != request.prevLogTerm:
+            #if request.prevLogIndex == -1 and request.prevLogTerm == -1:
+            # This case arises, when the LEADER's log is empty.
+            # With Lease mechanism, it is not possible, as the leader appends NO-OP.
+            # TODO: emove it after implementing lease.
+            #reply.success = True
+            #logger.DUMP_LOGGER.info("AppendEntryAccepted")
+            #return reply
+
+            # extract the log
+            server_logs = list(map(lambda x: command.Command(command.Command.command_type_from_str(x.command), x.term), request.entries))
+            
+            # 2. Reply false if log doesn’t contain an entry at prevLogIndex
+            #  whose term matches prevLogTerm (§5.3)
+            if request.prevLogIndex < len(self.logs):
+                # Log exists, so check if term is matching
+                # Now, check if the entry at prevLogIndex has same term as prevLogTerm 
+                if request.prevLogIndex != -1 and (self.logs[request.prevLogIndex].term != request.prevLogTerm):
+                    # term not matching, send ConflictIndex and ConflictTerm
                     reply.conflictTerm = self.logs[request.prevLogIndex].term
                     idx = request.prevLogIndex
                     while idx >= 0 and self.logs[idx].term == reply.conflictTerm:
                         reply.conflictIndex = idx
                         idx -= 1
-
-                if reply.conflictIndex != -1 or reply.conflictTerm != -1:
-                    logger.DUMP_LOGGER.info(
-                        "AppendEntries Index match Conflicting. Term: %s startIndex: %s",
-                        reply.conflictTerm,
-                        reply.conflictIndex,
-                    )
                     reply.success = False
+                    logger.DUMP_LOGGER.info("AppendEntry Fails. conflictIndex: %s conflictTerm: %s", reply.conflictIndex, reply.conflictTerm)
                     return reply
-            """ 
-            if (len(self.logs) <= request.prevLogIndex) or (self.logs[request.prevLogIndex].term != request.prevLogTerm):
-                reply.conflictIndex = 0
-                if len(self.logs) > 0:
-                    reply.conflictTerm = self.logs[request.prevLogIndex].term if request.prevLogIndex
-                    
-                    idx = request.prevLogIndex
-                    while idx>=0 and self.logs[idx].term == reply.conflictTerm:
-                        reply.conflictIndex = idx
-                        idx -= 1
-                
-                logger.DUMP_LOGGER.info("AppendEntries Index match Conflicting. Term: %s startIndex: %s", reply.conflictTerm, reply.conflictIndex)
+                # Add/updates the logs
+                self.logs[request.prevLogIndex+1:] = server_logs
+                if len(server_logs) > 0:
+                    logger.DUMP_LOGGER.info("AppendEntry appened logs of size %s. Logs: %s ", len(server_logs), " ".join(list(map(str, self.logs))))
+                else:
+                    logger.DUMP_LOGGER.info("AppendEntry HB accepted")
+                reply.success = True
+                return reply
+            else:
+                # Index not exist
+                # The index next to the last entry, i.e. size
+                logger.DUMP_LOGGER.info("AppendEntry Fails. conflictIndex: %s", reply.conflictIndex)
+                reply.conflictIndex = len(self.logs)
                 reply.success = False
                 return reply
-            """
-            logger.DUMP_LOGGER.info("AppendEntryAccepted")
-            reply.success = True
         return reply
 
     def send_append_entries(
@@ -468,8 +475,9 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 # Lease
                 return
             if reply.success:
+                self.nextIndex[node_id] += len(args.entries)
                 logger.DUMP_LOGGER.debug(
-                    "Success AppendEntries at %s from %s.", self.my_id, node_id
+                    "Success AppendEntries from %s. nextIdx: %s", node_id, self.nextIndex[node_id]
                 )
                 return
 
@@ -503,23 +511,42 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             if peer_id == self.my_id:
                 continue
             # TODO: Add lease time
-            # logger.DUMP_LOGGER.info("")
-            prevLogIndex = self.nextIndex[peer_id] - 1
-            prevLogTerm = (
-                -1
-                if ((self.nextIndex[peer_id] - 1) < 0)
-                else self.logs[self.nextIndex[peer_id] - 1]
-            )
-
+            
+            prevIndex = self.nextIndex[peer_id] - 1
+            logger.DUMP_LOGGER.info(f"logs: {self.logs[0]}")
+            prevTerm = -1 if prevIndex < 0 else self.logs[prevIndex].term
+            
             args = raft_pb2.AppendEntriesArgs(
                 term=self.currentTerm,
                 leaderId=self.my_id,
-                prevLogIndex=prevLogIndex,
-                prevLogTerm=prevLogTerm,
+                prevLogIndex=prevIndex,
+                prevLogTerm=prevTerm,
                 leaderCommit=self.commitIndex,
             )
+            # if len(self.logs) > self.nextIndex[peer_id]:
+            #    log_to_send = self.logs[self.nextIndex[peer_id]:]
+            #    args.entries.extend(log_to_send)
+            #logs_to_send = self.logs[max(0, prevIndex):]
+            logs_to_send = self.logs[prevIndex+1:]
+            logs_in_pb2 = list(map(lambda x: raft_pb2.Command(command=x.cmd.value, term=x.term), logs_to_send))
 
-            self.executor.submit(self.send_append_entries, peer_id, args, True)
+            """ logger.DUMP_LOGGER.info(
+                "Sending HB node %s, len %s, logs %s",
+                peer_id,
+                len(self.logs),
+                str(logs_to_send),
+            )"""
+            args.entries.extend(logs_in_pb2)
+            logger.DUMP_LOGGER.info(
+                "Sending HB to node %s, MyLoglen %s, nextIdx %s SendLogLen %s",
+                peer_id,
+                len(self.logs),
+                " ".join(list(map(str, logs_to_send))),
+                len(args.entries),
+            )
+            self.executor.submit(
+                self.send_append_entries, peer_id, args, len(args.entries) > 0
+            )
         self.__update_timer(HEARTBEAT_TIMEOUT)
 
     def __election_timeout(self) -> int:

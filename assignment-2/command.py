@@ -14,10 +14,9 @@ class CommandType(enum.Enum):
 class Command:
     """Command"""
 
-    def __init__(self, cmd: CommandType, **kwargs):
+    def __init__(self, cmd: CommandType, term: int, **kwargs):
         self.cmd = cmd
-        if "term" in kwargs.items():
-            self.term = kwargs["term"]
+        self.term = term
 
         if self.cmd == CommandType.SET:
             self.key = kwargs["key"]
@@ -33,3 +32,8 @@ class Command:
         if self.cmd == CommandType.SET:
             return f"{self.cmd.value} {self.key} {self.value} {self.term}"
         return ""
+
+    @staticmethod
+    def command_type_from_str(type_str: str) -> CommandType:
+        """Returns CommandType from string"""
+        return list(filter(lambda x : x.value == type_str, CommandType))[0]

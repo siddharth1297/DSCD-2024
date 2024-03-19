@@ -21,12 +21,16 @@ message RequestVoteReply {
     int32 leaseRemainingDuration = 3;
 }
 
+message Command {
+    string command = 1;
+    int32 term = 2;
+}
 message AppendEntriesArgs {
     int32 term = 1;
     int32 leaderId = 2;
     int32 prevLogIndex = 3;
     int32 prevLogTerm = 4;
-    repeated string entries = 5;
+    repeated Command entries = 5;
     int32 leaderCommit = 6;
     
     int32 leaseRemainingDuration = 7;
