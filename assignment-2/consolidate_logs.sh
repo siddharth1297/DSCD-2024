@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm -f combine.tmp
+rm -f combine.tmp log.tmp
 
 cat logs_node_0/dump.txt > combine.tmp
 cat logs_node_1/dump.txt >> combine.tmp

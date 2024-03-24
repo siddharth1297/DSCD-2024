@@ -29,10 +29,12 @@ def signal_handler(_sig, _frame):
 
 
 def main(
-    node_id: int, raft_cluster: typing.Dict[int, str], kv_cluster: typing.Dict[int, str]
+    node_id: int, raft_cluster: typing.Dict[int, str], kv_cluster: typing.Dict[int, str], rejoin
 ) -> None:
     """main"""
     logger.set_logger(f"logs_node_{node_id}/", f"Node-{str(node_id)}", LOGGING_LEVEL)
+    meta_fd = logger.create_manual_logger(f"logs_node_{node_id}/metadata.txt", rejoin)
+    logs_fd = logger.create_manual_logger(f"logs_node_{node_id}/logs.txt", rejoin)
     logger.DUMP_LOGGER.info(
         "NodeId %s ProcessId %s Raft %s KV %s",
         node_id,
@@ -42,7 +44,7 @@ def main(
     )
     global RF, KV
     KV = kvserver.KVServer(node_id, raft_cluster, kv_cluster)
-    RF = raft.Raft(node_id, raft_cluster, KV)
+    RF = raft.Raft(node_id, raft_cluster, KV, logs_fd=logs_fd, metadata_fd=meta_fd)
     KV.set_state_machine(RF)
     KV.start()
     signal.signal(signal.SIGINT, signal_handler)
@@ -52,8 +54,9 @@ def main(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Raft",
-        epilog="$ python3 main.py --config config.yaml --id 0",
+        epilog="$ python3 main.py --config config.yaml [--rejoin] --id 0",
     )
+    parser.add_argument('--rejoin', action='store_true', help='rejoin the cluster. It will read from the logs')
     parser.add_argument(
         "-c", "--config", help="cluster config", required=True, type=str
     )
@@ -62,4 +65,4 @@ if __name__ == "__main__":
     with open(args.config, "r", encoding="UTF-8") as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
         raft_cluster, kv_cluster = util.clusters_from_config(config)
-    main(args.id, raft_cluster, kv_cluster)
+    main(args.id, raft_cluster, kv_cluster, args.rejoin)

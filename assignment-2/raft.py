@@ -3,6 +3,7 @@ Raft
 """
 from concurrent import futures
 import enum
+import os
 import random
 import threading
 import time
@@ -20,7 +21,7 @@ MAX_WORKERS = 2
 
 HEARTBEAT_TIMEOUT = 1  # Seconds
 ELECTION_TIMEOUT_RANGE = (5, 10)  # Second
-LEASE_TIMEOUT = 10  # Second
+LEASE_TIMEOUT = 3  # Second
 
 
 class State(enum.Enum):
@@ -47,7 +48,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     # pylint: disable=too-many-instance-attributes,invalid-name
 
-    def __init__(self, node_id: int, peers: list[str], kv):
+    def __init__(self, node_id: int, peers: list[str], kv, **kwargs):
         self.my_id = node_id
         self.peers = peers
         self.server_port = peers[self.my_id].split(":")[1]
@@ -57,13 +58,13 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
         ## Raft state
         # Persistent states on server
-        self.state = State.FOLLOWER
         self.currentTerm = 0
         self.votedFor = -1
         self.logs = []
 
         # Volatile states on all servers
-        self.commitIndex = 0
+        self.state = State.FOLLOWER
+        self.commitIndex = 0            # commitLength
         self.lastApplied = 0
 
         # Volatile state on leadders
@@ -83,10 +84,14 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
         self.leaderId = -1
 
+        self.logs_fd = kwargs["logs_fd"]
+        self.metadata_fd = kwargs["metadata_fd"]
+
         self.executor = futures.ThreadPoolExecutor(len(self.peers) - 1)
         self.timer_thread = threading.Thread(target=self.__timer)
 
-        self.__change_state_to_follower(self.currentTerm, 0, "StartUp")
+        self.__replay()
+        self.__change_state_to_follower(self.currentTerm, self.currentTerm, "StartUp")
         self.__serve()
         self.timer_thread.start()
 
@@ -107,6 +112,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.timer_thread.join()
         self.server.stop(1.5).wait()
         self.executor.shutdown(wait=True, cancel_futures=True)
+
+        os.fsync(self.metadata_fd)
+        os.fsync(self.logs_fd)
+        self.metadata_fd.close()
+        self.logs_fd.close()
 
     def get_leader_id(self) -> int:
         """Returns the leader id known to this node"""
@@ -130,11 +140,66 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.logs.append(cmd)
         term = self.currentTerm
         index = len(self.logs) - 1
+        self.nextIndex[self.my_id] += 1 # Update it, as it will be used while counting majority
+        self.__persist()
         logger.DUMP_LOGGER.info(
             "Appended command [%s] at index %s term %s", cmd, index, term
         )
-        # persists here
         return (index, term)
+
+    def __replay(self) -> None:
+        """Reads state from persistent storage"""
+        dumped_meta = self.metadata_fd.read()
+        dumped_meta_lines = dumped_meta.split("\n")
+        for line in dumped_meta_lines:
+            if line == "":
+                continue
+            words = line.split(" ")
+            keyword, value = words[0], words[1]
+            if keyword == "term":
+                self.currentTerm = int(value)
+            if keyword == "votedFor":
+                self.votedFor = int(value)
+            if keyword == "commitIndex":
+                self.commitIndex = int(value)
+        
+        dumped_logs = self.logs_fd.read()
+        dumped_logs_lines = dumped_logs.split("\n")
+        for line in dumped_logs_lines:
+            if line == "":
+                continue
+            words = line.split(" ")
+            cmd_type = command.Command.command_type_from_str(words[0])
+            if cmd_type == command.CommandType.NOOP:
+                cmd = command.Command(command.CommandType.NOOP, int(words[1]))
+            elif cmd_type == command.CommandType.SET:
+                cmd = command.Command(command.CommandType.SET, int(words[3]), key=words[1], value=words[2])
+            else:
+                cmd = None
+            if cmd is not None:
+                self.logs.append(cmd)
+        self.logs_fd.seek(0)
+        self.metadata_fd.seek(0)
+        logger.DUMP_LOGGER.info("State: term %s votedFor %s commitIndex %s logs: [%s]", self.currentTerm, self.votedFor, self.commitIndex, " | ".join(map(str, self.logs)))
+
+    def __persist(self) -> None:
+        """Store non-volatile states to file"""
+        # Just for simplicity
+        logs_to_write = "\n".join(map(str, self.logs))
+        metadata_to_write = f"term {self.currentTerm} \nvotedFor {self.votedFor} \ncommitIndex {self.commitIndex}"
+
+        if len(logs_to_write) > 0:
+            self.logs_fd.seek(0)
+            self.logs_fd.truncate()
+            self.logs_fd.write(logs_to_write)
+        
+        if len(metadata_to_write) > 0:
+            self.metadata_fd.seek(0)
+            self.metadata_fd.truncate()
+            self.metadata_fd.write(metadata_to_write)
+
+        # Flush at stop
+
 
     def __update_lease(self, access_time: int, lease_interval: int) -> None:
         """Updates lease interval"""
@@ -228,10 +293,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             "Node %s became the leader for term %s.", self.my_id, self.currentTerm
         )
         self.nextIndex = [len(self.logs)] * len(self.peers)
+        # self.matchIndex =  TODO: Set it
         self.__append_entry(
             command.Command(command.CommandType.NOOP, self.currentTerm)
         )
-        # self.matchIndex =  TODO: Set it
+        # Already persisted in the above step.
         self.__send_heartbeat()
         # if not self.__renew_lease(util.current_time_second()):
         #    self.__send_heartbeat()
@@ -244,6 +310,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.currentTerm = term
         self.votedFor = -1
         self.leaderId = -1
+        self.__persist()
         self.__update_lease(util.current_time_second(), lease_remaining_duration)
         self.__update_timer(self.__election_timeout())
         logger.DUMP_LOGGER.debug(
@@ -297,6 +364,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 reply.voteGranted = True
                 self.currentTerm = request.term
                 self.votedFor = request.candidateId
+                self.__persist()
                 logger.DUMP_LOGGER.info(
                     "Vote granted for Node %s in term %s.",
                     request.candidateId,
@@ -322,7 +390,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.currentTerm += 1
         self.votedFor = self.my_id
         self.votes_received = 1
-
+        self.__persist()
         # pylint: disable=no-member
         args = raft_pb2.RequestVoteArgs()
         args.term = self.currentTerm
@@ -403,7 +471,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.__update_timer(self.__election_timeout())
 
             logger.DUMP_LOGGER.info(
-                "Request prevLogindex: %s term: %s", request.prevLogIndex, request.prevLogTerm
+                "Request prevLogindex: %s term: %s commitIndex %s", request.prevLogIndex, request.prevLogTerm, request.leaderCommit
             )
             #if request.prevLogIndex == -1 and request.prevLogTerm == -1:
             # This case arises, when the LEADER's log is empty.
@@ -414,7 +482,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             #return reply
 
             # extract the log
-            server_logs = list(map(lambda x: command.Command(command.Command.command_type_from_str(x.command), x.term), request.entries))
+            leader_logs = list(map(lambda x: command.Command(command.Command.command_type_from_str(x.command), x.term), request.entries))
             
             # 2. Reply false if log doesn’t contain an entry at prevLogIndex
             #  whose term matches prevLogTerm (§5.3)
@@ -431,12 +499,27 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                     reply.success = False
                     logger.DUMP_LOGGER.info("AppendEntry Fails. conflictIndex: %s conflictTerm: %s", reply.conflictIndex, reply.conflictTerm)
                     return reply
+                # Remove extra logs beyond leader's prevLogIndex
+                # Scenario: follower log size = 10, client log size = 7. So drop the extra logs
+                log_cut = False
+                if (request.prevLogIndex+1) != len(self.logs):
+                    log_cut = True
+                self.logs = self.logs[:request.prevLogIndex+1]
+
                 # Add/updates the logs
-                self.logs[request.prevLogIndex+1:] = server_logs
-                if len(server_logs) > 0:
-                    logger.DUMP_LOGGER.info("AppendEntry appened logs of size %s. Logs: %s ", len(server_logs), " ".join(list(map(str, self.logs))))
+                self.logs[request.prevLogIndex+1:] = leader_logs
+                if log_cut or (len(leader_logs) > 0):
+                    self.__persist()
+                    logger.DUMP_LOGGER.info("AppendEntry appened logs. cut %s size %s. Logs: %s ", log_cut, len(leader_logs), " ".join(list(map(str, self.logs))))
                 else:
                     logger.DUMP_LOGGER.info("AppendEntry HB accepted")
+
+                if request.leaderCommit > self.commitIndex:
+                    new_commit_idx = min(request.leaderCommit, len(self.logs))
+                    if self.commitIndex != new_commit_idx:
+                        self.commitIndex = new_commit_idx
+                        self.__persist()
+                        logger.DUMP_LOGGER.debug("CommitIndex updated to %s", self.commitIndex)
                 reply.success = True
                 return reply
             else:
@@ -454,6 +537,14 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         """Sends append entry messages"""
         success = False
         # retry, for lease interval
+        # TODO: Remove the below, don't try from here, because thread is already dedicated, and
+        # in the next appendEntry this node may be assigned a new thread, and a node later to this node has to wait as pool is empty.
+        # The other way to implement is store all the futures returned by the executor.submit().
+        # Next time, if the future is value, then submit the job otherwise don't
+
+        # Keep this comment even after implementing.
+
+        # TODO: Take mutex and check
         while self.active and self.state == State.LEADER and not success:
             try:
                 with grpc.insecure_channel(self.peers[node_id]) as channel:
@@ -465,8 +556,9 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                     "Error occurred while sending RPC to Node %s. AppendEntries. Error: %s",
                     node_id,
                     str(err),
-                    # str(err.args),
+                    #str(err.args),
                 )
+                return # TODO: Remove it after testing
                 if heartbeat:
                     # Don't try for heartbeat message
                     return
@@ -479,6 +571,37 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 logger.DUMP_LOGGER.debug(
                     "Success AppendEntries from %s. nextIdx: %s", node_id, self.nextIndex[node_id]
                 )
+                logger.DUMP_LOGGER.debug("Next Idx: %s", " ".join(map(str, self.nextIndex)))
+                # Find the indices to commit
+                # Find the indices that are not yet commited
+                #find_commitable_indices = lambda x: x>self.commitIndex
+                #find_rep_cnt_commitable = lambda counts, item: {**counts, item[0]: counts.get(item[0], 0) + item[1]}
+                #commit_factor_predicate = lambda tup: tup[1] > (len(self.peers) / 2)
+                #idx_count_map = functools.reduce(lambda counts, item: {**counts, item[0]: counts.get(item[0], 0) + item[1]}, map(lambda x: x>self.commitIndex, self.nextIndex), {})
+                #self.commitIndex = max(list(map(lambda x: x[1], filter(lambda tup: tup[1] > (len(self.peers) / 2), zip(idx_count_map.keys(), idx_count_map.values())))))
+
+                # Find peers, whose nextIdx id more than commit Index
+                uncommited_indices_list = list(filter(lambda x: x > self.commitIndex, self.nextIndex))
+                if len(uncommited_indices_list) == 0:
+                    return
+                logger.DUMP_LOGGER.debug("uncommited_indices_list: %s", " ".join(map(str, uncommited_indices_list)))
+                # Count no of times these indices are replicated
+                count = {}
+                for i in uncommited_indices_list:
+                    count[i] = count.get(i, 0) + 1
+                logger.DUMP_LOGGER.debug("MAP: len: %s %s %s", len(count), count, count[1])
+                # filter out the indices that are replicated more than majority
+                majority_indices = []
+                for k, v in count.items():
+                    if v > (len(self.peers)/2):
+                        majority_indices.append(k)
+                #logger.DUMP_LOGGER.debug("MajorityIndices: len-> %s %s", len(majority_indices), " ".join(map(str, majority_indices)))
+                # Take the max index
+                if len(majority_indices) == 0:
+                    return
+                self.commitIndex = max(majority_indices)
+                self.__persist()
+                logger.DUMP_LOGGER.debug("NEWCOMMITIDx  %s", self.commitIndex)
                 return
 
             if reply.term > self.currentTerm:
@@ -494,6 +617,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 )
                 return
 
+            # Fail due to log missmatch
             logger.DUMP_LOGGER.debug(
                 "Fail AppendEntries at %s from %s. ConflictIndex %s ConflictTerm %s",
                 self.my_id,
@@ -501,6 +625,8 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 reply.conflictIndex,
                 reply.conflictTerm,
             )
+            self.nextIndex[node_id] = reply.conflictIndex
+            # TODO: Handle conflictTerm
 
     def __send_heartbeat(self) -> None:
         """Sends heartbeat to peers"""
