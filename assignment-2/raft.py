@@ -123,17 +123,19 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         with self.mutex:
             return self.leaderId
 
-    def write_to_raft(self, cmd: command.Command) -> typing.Tuple[int, int, bool]:
+    def write_to_raft(self, cmd: command.Command) -> typing.Tuple[int, int, bool, bool, int]:
         """
         Writes to the state machine and replicates.
-        Returns: (LogIndex, term, isLeader with Lease)
+        Returns: (LogIndex, term, isLeader, hasLease, leaderId)
         """
         with self.mutex:
+            term = self.currentTerm
+            leader_id = self.leaderId
             if self.state == State.LEADER:
                 # TODO: Add Lease
                 cmd.set_term(self.currentTerm)
-                return (*self.__append_entry(cmd), True)
-        return (-1, -1, False)
+                return (*self.__append_entry(cmd), True, True, leader_id)
+        return (-1, term, False, False, leader_id)
 
     def __append_entry(self, cmd: command.Command) -> typing.Tuple[int, int]:
         """Appends command to log and returns log index and term number"""
@@ -161,7 +163,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             if keyword == "votedFor":
                 self.votedFor = int(value)
             if keyword == "commitIndex":
-                self.commitIndex = int(value)
+                self.commitIndex = int(value) ## TODO: Ignore this commit length. Use the log length
         
         dumped_logs = self.logs_fd.read()
         dumped_logs_lines = dumped_logs.split("\n")
@@ -192,12 +194,13 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.logs_fd.seek(0)
             self.logs_fd.truncate()
             self.logs_fd.write(logs_to_write)
+            self.logs_fd.flush()
         
         if len(metadata_to_write) > 0:
             self.metadata_fd.seek(0)
             self.metadata_fd.truncate()
             self.metadata_fd.write(metadata_to_write)
-
+            self.metadata_fd.flush()
         # Flush at stop
 
 
@@ -482,7 +485,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             #return reply
 
             # extract the log
-            leader_logs = list(map(lambda x: command.Command(command.Command.command_type_from_str(x.command), x.term), request.entries))
+            leader_logs = list(map(lambda x: command.Command.cmd_from_pb2(x.command, x.term), request.entries))
             
             # 2. Reply false if log doesn’t contain an entry at prevLogIndex
             #  whose term matches prevLogTerm (§5.3)
@@ -513,7 +516,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                     logger.DUMP_LOGGER.info("AppendEntry appened logs. cut %s size %s. Logs: %s ", log_cut, len(leader_logs), " ".join(list(map(str, self.logs))))
                 else:
                     logger.DUMP_LOGGER.info("AppendEntry HB accepted")
-
+                ## TODO: In case of log_cut reduce the commit length
                 if request.leaderCommit > self.commitIndex:
                     new_commit_idx = min(request.leaderCommit, len(self.logs))
                     if self.commitIndex != new_commit_idx:
@@ -589,7 +592,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 count = {}
                 for i in uncommited_indices_list:
                     count[i] = count.get(i, 0) + 1
-                logger.DUMP_LOGGER.debug("MAP: len: %s %s %s", len(count), count, count[1])
+                logger.DUMP_LOGGER.debug("MAP: len: %s %s", len(count), count)
                 # filter out the indices that are replicated more than majority
                 majority_indices = []
                 for k, v in count.items():
@@ -639,7 +642,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             # TODO: Add lease time
             
             prevIndex = self.nextIndex[peer_id] - 1
-            logger.DUMP_LOGGER.info(f"logs: {self.logs[0]}")
+            logger.DUMP_LOGGER.debug("logs: %s", " | ".join(map(str, self.logs)))
             prevTerm = -1 if prevIndex < 0 else self.logs[prevIndex].term
             
             args = raft_pb2.AppendEntriesArgs(
@@ -654,7 +657,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             #    args.entries.extend(log_to_send)
             #logs_to_send = self.logs[max(0, prevIndex):]
             logs_to_send = self.logs[prevIndex+1:]
-            logs_in_pb2 = list(map(lambda x: raft_pb2.Command(command=x.cmd.value, term=x.term), logs_to_send))
+            logs_in_pb2 = list(map(lambda x: raft_pb2.Command(command=x.cmd_to_pb2(), term=x.term), logs_to_send))
 
             """ logger.DUMP_LOGGER.info(
                 "Sending HB node %s, len %s, logs %s",

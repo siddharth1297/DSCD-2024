@@ -33,6 +33,25 @@ class Command:
             return f"{self.cmd.value} {self.key} {self.value} {self.term}"
         return ""
 
+    def cmd_to_pb2(self) -> str:
+        """Command to string. no term"""
+        if self.cmd == CommandType.NOOP:
+            return f"{self.cmd.value}"
+        if self.cmd == CommandType.SET:
+            return f"{self.cmd.value} {self.key} {self.value}"
+        return ""
+    
+    @classmethod
+    def cmd_from_pb2(cls, msg: str, term: int):
+        """Returns command from pb2 message"""
+        words = msg.split(" ")
+        cmd_type = Command.command_type_from_str(words[0])
+        if cmd_type == CommandType.NOOP:
+            return Command(cmd_type, term)
+        if cmd_type == CommandType.SET:
+            return Command(cmd_type, term, key=words[1], value=words[2])
+        return None
+
     @staticmethod
     def command_type_from_str(type_str: str) -> CommandType:
         """Returns CommandType from string"""

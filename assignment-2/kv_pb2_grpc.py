@@ -14,10 +14,10 @@ class KVServiceStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Put = channel.unary_unary(
-                '/KV.KVService/Put',
-                request_serializer=kv__pb2.PutArgs.SerializeToString,
-                response_deserializer=kv__pb2.PutReply.FromString,
+        self.Set = channel.unary_unary(
+                '/KV.KVService/Set',
+                request_serializer=kv__pb2.SetArgs.SerializeToString,
+                response_deserializer=kv__pb2.SetReply.FromString,
                 )
         self.Get = channel.unary_unary(
                 '/KV.KVService/Get',
@@ -34,7 +34,7 @@ class KVServiceStub(object):
 class KVServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def Put(self, request, context):
+    def Set(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -55,10 +55,10 @@ class KVServiceServicer(object):
 
 def add_KVServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Put': grpc.unary_unary_rpc_method_handler(
-                    servicer.Put,
-                    request_deserializer=kv__pb2.PutArgs.FromString,
-                    response_serializer=kv__pb2.PutReply.SerializeToString,
+            'Set': grpc.unary_unary_rpc_method_handler(
+                    servicer.Set,
+                    request_deserializer=kv__pb2.SetArgs.FromString,
+                    response_serializer=kv__pb2.SetReply.SerializeToString,
             ),
             'Get': grpc.unary_unary_rpc_method_handler(
                     servicer.Get,
@@ -81,7 +81,7 @@ class KVService(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def Put(request,
+    def Set(request,
             target,
             options=(),
             channel_credentials=None,
@@ -91,9 +91,9 @@ class KVService(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/KV.KVService/Put',
-            kv__pb2.PutArgs.SerializeToString,
-            kv__pb2.PutReply.FromString,
+        return grpc.experimental.unary_unary(request, target, '/KV.KVService/Set',
+            kv__pb2.SetArgs.SerializeToString,
+            kv__pb2.SetReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

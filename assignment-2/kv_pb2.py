@@ -14,17 +14,17 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08kv.proto\x12\x02KV\"%\n\x07PutArgs\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\";\n\x08PutReply\x12\x0e\n\x06status\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12\x10\n\x08leaderId\x18\x03 \x01(\x05\"\x16\n\x07GetArgs\x12\x0b\n\x03key\x18\x01 \x01(\t\"J\n\x08GetReply\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\x12\x10\n\x08leaderId\x18\x04 \x01(\x05\"\x0f\n\rGetLeaderArgs\"1\n\x0eGetLeaderReply\x12\x10\n\x08leaderId\x18\x01 \x01(\x05\x12\r\n\x05\x65rror\x18\x02 \x01(\t2\x83\x01\n\tKVService\x12 \n\x03Put\x12\x0b.KV.PutArgs\x1a\x0c.KV.PutReply\x12 \n\x03Get\x12\x0b.KV.GetArgs\x1a\x0c.KV.GetReply\x12\x32\n\tGetLeader\x12\x11.KV.GetLeaderArgs\x1a\x12.KV.GetLeaderReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x08kv.proto\x12\x02KV\"%\n\x07SetArgs\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\";\n\x08SetReply\x12\x0e\n\x06status\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\x12\x10\n\x08leaderId\x18\x03 \x01(\x05\"\x16\n\x07GetArgs\x12\x0b\n\x03key\x18\x01 \x01(\t\"J\n\x08GetReply\x12\x0e\n\x06status\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\x12\x10\n\x08leaderId\x18\x04 \x01(\x05\"\x0f\n\rGetLeaderArgs\"1\n\x0eGetLeaderReply\x12\x10\n\x08leaderId\x18\x01 \x01(\x05\x12\r\n\x05\x65rror\x18\x02 \x01(\t2\x83\x01\n\tKVService\x12 \n\x03Set\x12\x0b.KV.SetArgs\x1a\x0c.KV.SetReply\x12 \n\x03Get\x12\x0b.KV.GetArgs\x1a\x0c.KV.GetReply\x12\x32\n\tGetLeader\x12\x11.KV.GetLeaderArgs\x1a\x12.KV.GetLeaderReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'kv_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_PUTARGS']._serialized_start=16
-  _globals['_PUTARGS']._serialized_end=53
-  _globals['_PUTREPLY']._serialized_start=55
-  _globals['_PUTREPLY']._serialized_end=114
+  _globals['_SETARGS']._serialized_start=16
+  _globals['_SETARGS']._serialized_end=53
+  _globals['_SETREPLY']._serialized_start=55
+  _globals['_SETREPLY']._serialized_end=114
   _globals['_GETARGS']._serialized_start=116
   _globals['_GETARGS']._serialized_end=138
   _globals['_GETREPLY']._serialized_start=140

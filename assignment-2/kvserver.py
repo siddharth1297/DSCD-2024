@@ -2,6 +2,8 @@
 KV Server
 """
 from concurrent import futures
+import enum
+import time
 import grpc
 
 import kv_pb2
@@ -12,6 +14,14 @@ import raft
 import command
 
 MAX_WORKERS = 2
+
+class KVErrors(enum.Enum):
+    """Errors"""
+
+    NOT_LEADER = "NOT_LEADER"           # leaderId is set.
+    LEADER_UNKNOWN = "LEADER_UNKNOWN"   # leaderId is set to -1
+    LEADER_WITHOUT_LEASE = "LEADER_WITHOUT_LEASE" #
+    RAFT_ERROR = "RAFT_ERROR"           # some error in the raft module.
 
 
 class KVServer:
@@ -55,10 +65,23 @@ class KVServer:
         """stops KV service"""
         self.server.stop(1).wait()
 
-    def Put(self, request: kv_pb2.PutArgs, context) -> kv_pb2.PutReply:
-        """KV Put RPC"""
-        cmd = command.Command(command.CommandType.SET)
-        return kv_pb2.PutReply(cmd)
+    def Set(self, request: kv_pb2.SetArgs, context) -> kv_pb2.SetReply:
+        """KV Set RPC"""
+        logger.DUMP_LOGGER.info("START SET %s %s", request.key, request.value)
+        cmd = command.Command(command.CommandType.SET, term=-1, key=request.key, value=request.value)
+        log_idx, log_term, is_leader, has_lease, leader_id = self.raft.write_to_raft(cmd)
+        if not is_leader:
+            error = KVErrors.NOT_LEADER
+            if leader_id == -1:
+                error = KVErrors.LEADER_UNKNOWN
+            return kv_pb2.SetReply(status=False, error=error.value, leader_id=leader_id)
+        
+        if not has_lease:
+            error = KVErrors.LEADER_WITHOUT_LEASE
+            return kv_pb2.SetReply(status=False, error=error.value, leader_id=leader_id)
+        
+        logger.DUMP_LOGGER.info("END SET %s %s", request.key, request.value)
+        return kv_pb2.SetReply(status=True)
 
     def Get(self, request: kv_pb2.GetArgs, context) -> kv_pb2.GetReply:
         """KV Get RPC"""
