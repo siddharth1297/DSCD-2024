@@ -151,6 +151,8 @@ class KVServer:
             time.sleep(0.25)
             replicated, same_cmd = self.__is_command_applied(idx, cmd)
             if replicated:
+                if same_cmd:
+                    # TODO: Delete from applied_dict
                 return (
                     same_cmd,
                     (KVErrors.NO_ERROR if same_cmd else KVErrors.CMD_CHANGED).value,

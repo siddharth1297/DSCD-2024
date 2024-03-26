@@ -158,7 +158,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.my_id
         ] += 1  # Update it, as it will be used while counting majority
         self.__persist()
-        logger.DUMP_LOGGER.info(
+        logger.DUMP_LOGGER.debug(
             "Appended command [%s] at index %s term %s", cmd, index, term
         )
         return (index, term)
@@ -205,7 +205,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.currentTerm,
             self.votedFor,
             self.commitIndex,
-            " | ".join(map(str, self.logs)),
+            "][".join(map(str, self.logs)),
         )
 
     def __persist(self) -> None:
@@ -338,7 +338,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.__persist()
         self.__update_lease(util.current_time_second(), lease_remaining_duration)
         self.__update_timer(self.__election_timeout())
-        logger.DUMP_LOGGER.debug(
+        logger.DUMP_LOGGER.info(
             "Changed state to Follower %s, term: %s", why, self.currentTerm
         )
 
@@ -449,12 +449,12 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     def __send_request_vote(self, node_id: int, args: raft_pb2.RequestVoteArgs) -> None:
         """Sends request vote"""
-        logger.DUMP_LOGGER.info(
+        """logger.DUMP_LOGGER.info(
             "Sending RequestVote to id %s address %s",
             node_id,
             self.peers[node_id]
             # args,
-        )
+        )"""
         try:
             with grpc.insecure_channel(self.peers[node_id]) as channel:
                 stub = raft_pb2_grpc.RaftServiceStub(channel)
@@ -518,8 +518,8 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.leaderId = request.leaderId
             self.__update_timer(self.__election_timeout())
 
-            logger.DUMP_LOGGER.info(
-                "Request prevLogindex: %s term: %s commitIndex %s",
+            logger.DUMP_LOGGER.debug(
+                "AppendEntries prevLogindex: %s term: %s commitIndex %s",
                 request.prevLogIndex,
                 request.prevLogTerm,
                 request.leaderCommit,
@@ -529,7 +529,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             # With Lease mechanism, it is not possible, as the leader appends NO-OP.
             # TODO: emove it after implementing lease.
             # reply.success = True
-            # logger.DUMP_LOGGER.info("AppendEntryAccepted")
+            # logger.DUMP_LOGGER.debug("AppendEntryAccepted")
             # return reply
 
             # extract the log
@@ -555,7 +555,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                         reply.conflictIndex = idx
                         idx -= 1
                     reply.success = False
-                    logger.DUMP_LOGGER.info(
+                    logger.DUMP_LOGGER.debug(
                         "AppendEntry Fails. conflictIndex: %s conflictTerm: %s",
                         reply.conflictIndex,
                         reply.conflictTerm,
@@ -573,14 +573,17 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 if log_cut or (len(leader_logs) > 0):
                     self.__persist()
                     logger.DUMP_LOGGER.info(
-                        "AppendEntry appened logs. cut %s size %s. Logs: %s ",
+                        "AppendEntry appened logs. cut %s size %s. Logs: [%s]",
                         log_cut,
                         len(leader_logs),
-                        " ".join(list(map(str, self.logs))),
+                        "][".join(list(map(str, self.logs))),
                     )
                 else:
-                    logger.DUMP_LOGGER.info("AppendEntry HB accepted")
-                ## TODO: In case of log_cut reduce the commit length
+                    logger.DUMP_LOGGER.debug("AppendEntry HB accepted")
+                
+                # TODO(VVI): In case of log_cut reduce the commitIndex
+                # In case of log_cut, the log that are being cut are not committed yet. So no need of adjusting commitIndex
+                
                 if request.leaderCommit > self.commitIndex:
                     new_commit_idx = min(request.leaderCommit, len(self.logs))
                     if self.commitIndex != new_commit_idx:
@@ -594,7 +597,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             else:
                 # Index not exist
                 # The index next to the last entry, i.e. size
-                logger.DUMP_LOGGER.info(
+                logger.DUMP_LOGGER.debug(
                     "AppendEntry Fails. conflictIndex: %s", reply.conflictIndex
                 )
                 reply.conflictIndex = len(self.logs)
@@ -643,6 +646,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 # Lease
                 return
             if reply.success:
+                # TODO: ignore if it is an old rpc
                 self.nextIndex[node_id] += len(args.entries)
                 logger.DUMP_LOGGER.debug(
                     "Success AppendEntries from %s. nextIdx: %s",
@@ -718,13 +722,13 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         logger.DUMP_LOGGER.info(
             "Leader %s sending heartbeat & Renewing Lease", self.my_id
         )
+        logger.DUMP_LOGGER.debug("logs: [%s]", "][".join(map(str, self.logs)))
         for peer_id in range(len(self.peers)):
             if peer_id == self.my_id:
                 continue
             # TODO: Add lease time
 
             prevIndex = self.nextIndex[peer_id] - 1
-            logger.DUMP_LOGGER.debug("logs: %s", " | ".join(map(str, self.logs)))
             prevTerm = -1 if prevIndex < 0 else self.logs[prevIndex].term
 
             args = raft_pb2.AppendEntriesArgs(
@@ -745,20 +749,14 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                     logs_to_send,
                 )
             )
-
-            """ logger.DUMP_LOGGER.info(
-                "Sending HB node %s, len %s, logs %s",
-                peer_id,
-                len(self.logs),
-                str(logs_to_send),
-            )"""
             args.entries.extend(logs_in_pb2)
-            logger.DUMP_LOGGER.info(
-                "Sending HB to node %s, MyLoglen %s, nextIdx %s SendLogLen %s",
+            logger.DUMP_LOGGER.debug(
+                "Sending HB to node %s, MyLoglen %s, nextIdx %s Log [%s]",
                 peer_id,
                 len(self.logs),
-                " ".join(list(map(str, logs_to_send))),
-                len(args.entries),
+                self.nextIndex[peer_id],
+                "][".join(map(str, logs_to_send)),
+                #len(args.entries),
             )
             self.executor.submit(
                 self.send_append_entries, peer_id, args, len(args.entries) > 0
