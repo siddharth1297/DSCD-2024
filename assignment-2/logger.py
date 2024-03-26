@@ -58,10 +58,10 @@ def set_logger(logs_dir: str, prefix: str, level):
     __create_logs_dir(logs_dir)
     # pylint: disable=global-statement
     global LOGS_LOGGER, METADATA_LOGGER, DUMP_LOGGER
-    #LOGS_LOGGER = __setup_logger("logs", logs_dir + "logs.txt", prefix, level)
-    #METADATA_LOGGER = __setup_logger(
+    # LOGS_LOGGER = __setup_logger("logs", logs_dir + "logs.txt", prefix, level)
+    # METADATA_LOGGER = __setup_logger(
     #    "metadata", logs_dir + "metadata.txt", prefix, level
-    #)
+    # )
     DUMP_LOGGER = __setup_logger("dump", logs_dir + "dump.txt", prefix, level)
 
 
@@ -76,5 +76,5 @@ def create_manual_logger(file_name: str, rejoin: bool) -> None:
             pass
 
     mode = "r+" if __os.path.isfile(file_name) else "w+"
-    fd = open(file_name, mode, encoding= 'UTF-8')
+    fd = open(file_name, mode, encoding="UTF-8")
     return fd

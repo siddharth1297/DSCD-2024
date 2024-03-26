@@ -29,7 +29,10 @@ def signal_handler(_sig, _frame):
 
 
 def main(
-    node_id: int, raft_cluster: typing.Dict[int, str], kv_cluster: typing.Dict[int, str], rejoin
+    node_id: int,
+    raft_cluster: typing.Dict[int, str],
+    kv_cluster: typing.Dict[int, str],
+    rejoin,
 ) -> None:
     """main"""
     logger.set_logger(f"logs_node_{node_id}/", f"Node-{str(node_id)}", LOGGING_LEVEL)
@@ -56,7 +59,11 @@ if __name__ == "__main__":
         description="Raft",
         epilog="$ python3 main.py --config config.yaml [--rejoin] --id 0",
     )
-    parser.add_argument('--rejoin', action='store_true', help='rejoin the cluster. It will read from the logs')
+    parser.add_argument(
+        "--rejoin",
+        action="store_true",
+        help="rejoin the cluster. It will read from the logs",
+    )
     parser.add_argument(
         "-c", "--config", help="cluster config", required=True, type=str
     )

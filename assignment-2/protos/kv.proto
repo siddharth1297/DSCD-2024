@@ -24,7 +24,7 @@ message GetArgs {
 }
 
 message GetReply {
-    string status = 1;
+    bool status = 1;
     string value = 2;
     string error = 3;
     int32 leaderId = 4;
