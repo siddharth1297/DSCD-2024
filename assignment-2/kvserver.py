@@ -214,7 +214,9 @@ class KVServer:
             )
             if status:
                 return kv_pb2.GetReply(status=True, value=value)
-            return kv_pb2.GetReply(status=False, error=KVErrors.KEY_NOT_PRESENT.value)
+            return kv_pb2.GetReply(
+                status=True, value="", error=KVErrors.KEY_NOT_PRESENT.value
+            )
 
         error = KVErrors.NOT_LEADER
         if is_leader:

@@ -580,10 +580,10 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                     )
                 else:
                     logger.DUMP_LOGGER.debug("AppendEntry HB accepted")
-                
+
                 # TODO(VVI): In case of log_cut reduce the commitIndex
                 # In case of log_cut, the log that are being cut are not committed yet. So no need of adjusting commitIndex
-                
+
                 if request.leaderCommit > self.commitIndex:
                     new_commit_idx = min(request.leaderCommit, len(self.logs))
                     if self.commitIndex != new_commit_idx:
@@ -756,7 +756,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 len(self.logs),
                 self.nextIndex[peer_id],
                 "][".join(map(str, logs_to_send)),
-                #len(args.entries),
+                # len(args.entries),
             )
             self.executor.submit(
                 self.send_append_entries, peer_id, args, len(args.entries) > 0

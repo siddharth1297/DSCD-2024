@@ -120,7 +120,14 @@ class KVClient:
 
             return (False, "", reply.error)
 
-        return (reply.status, reply.value, "")
+        if reply.status:
+            logger.info(
+                'Got Reply. key: %s value: "%s" error: %s',
+                key,
+                reply.value,
+                reply.error,
+            )
+        return (reply.status, reply.value, reply.error)
 
     def set(self, key: str, value: str) -> typing.Tuple[bool, str]:
         """Set RPC client"""
@@ -198,7 +205,7 @@ class KVClient:
                 if res:
                     print("SUCCESS")
                 else:
-                    print(f"Failed. {err}")
+                    print(f"FAILED. {err}")
                 continue
 
             if "get" in cmd:
@@ -209,9 +216,9 @@ class KVClient:
                 key = words[1]
                 res, value, err = self.get(key)
                 if res:
-                    print(f"SUCCESS {value}")
+                    print(f'SUCCESS. {key} "{value}" {err}')
                 else:
-                    print(f"Failed. {err}")
+                    print(f"FAILED. {err}")
                 continue
 
             cmd = int(cmd)
