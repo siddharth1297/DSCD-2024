@@ -153,6 +153,7 @@ class KVServer:
             if replicated:
                 if same_cmd:
                     # TODO: Delete from applied_dict
+                    pass
                 return (
                     same_cmd,
                     (KVErrors.NO_ERROR if same_cmd else KVErrors.CMD_CHANGED).value,
