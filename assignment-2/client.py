@@ -45,7 +45,7 @@ class KVClient:
             if err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
                 logger.error("RPC TIMEOUT")
             elif err.code() == grpc.StatusCode.UNAVAILABLE:
-                logger.error("RPC Node %s unavailable", self.leader_id)
+                logger.error("RPC Node %s unavailable", node_id)
             else:
                 logger.error(
                     "Error occurred while sending RPC to Node %s. Code: %s. Error: %s",
@@ -203,9 +203,9 @@ class KVClient:
                 key, value = words[1], words[2]
                 res, err = self.set(key, value)
                 if res:
-                    print("SUCCESS")
+                    logger.info("SUCCESS")
                 else:
-                    print(f"FAILED. {err}")
+                    logger.info("FAILED. %s", err)
                 continue
 
             if "get" in cmd:
@@ -216,9 +216,9 @@ class KVClient:
                 key = words[1]
                 res, value, err = self.get(key)
                 if res:
-                    print(f'SUCCESS. {key} "{value}" {err}')
+                    logger.info('SUCCESS. %s "%s" %s', key, value, err)
                 else:
-                    print(f"FAILED. {err}")
+                    logger.info("FAILED. %s", err)
                 continue
 
             cmd = int(cmd)

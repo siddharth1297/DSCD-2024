@@ -19,9 +19,11 @@ import logger
 
 MAX_WORKERS = 2
 
-HEARTBEAT_TIMEOUT = 1  # Seconds
+HEARTBEAT_TIMEOUT = 1  # Second
 ELECTION_TIMEOUT_RANGE = (5, 10)  # Second
-LEASE_TIMEOUT = 3  # Second
+LEASE_TIMEOUT = 5  # Second
+APPEND_ENTRY_TIMEOUT = 0.9  # Second
+REQUEST_VOTE_TIMEOUT = 4  # Second
 
 
 class State(enum.Enum):
@@ -79,8 +81,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.has_lease = False  # If this node has lease
         self.leaseInterval = 0  # Lease expire time duration
         # For a leader, it is the time when it acquires the lease
-        # For a follower, it is the time when it received the last lease information
+        # For a follower, it is the time when it received the last lease information, which has the maximum lease duration
         self.lease_access_time = 0
+        self.reachability_nodes_cnt = (
+            0  # No of nodes that are reachable while performing AppendEntry
+        )
 
         self.leaderId = -1
 
@@ -144,9 +149,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             term = self.currentTerm
             leader_id = self.leaderId
             if self.state == State.LEADER:
-                # TODO: Add Lease
-                cmd.set_term(self.currentTerm)
-                return (*self.__append_entry(cmd), True, True, leader_id)
+                if self.has_lease:
+                    cmd.set_term(self.currentTerm)
+                    return (*self.__append_entry(cmd), True, True, leader_id)
+                else:
+                    logger.DUMP_LOGGER.debug("write_to_raft failed. No lease")
         return (-1, term, False, False, leader_id)
 
     def __append_entry(self, cmd: command.Command) -> typing.Tuple[int, int]:
@@ -179,7 +186,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             if keyword == "commitIndex":
                 self.commitIndex = int(
                     value
-                )  ## TODO: Ignore this commit length. Use the log length
+                )  # Don't rely on the logs. Use it as commitIndex
 
         dumped_logs = self.logs_fd.read()
         dumped_logs_lines = dumped_logs.split("\n")
@@ -229,78 +236,53 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     def __update_lease(self, access_time: int, lease_interval: int) -> None:
         """Updates lease interval"""
-        self.lease_access_time = access_time
-        self.leaseInterval = max(self.leaseInterval, lease_interval)
+        # For simplicity, avoid the network latency and drift
+        last_lease_interval_remaining = self.__get_lease_duration()
+        if lease_interval >= last_lease_interval_remaining:
+            self.lease_access_time = access_time
+            self.leaseInterval = lease_interval
+        # self.lease_access_time = access_time
+        # self.leaseInterval = max(self.leaseInterval, lease_interval)
 
     def __get_lease_duration(self):
         """Returns lease reamining duration"""
-        return (
-            max(
-                0,
-                self.lease_access_time
-                + self.leaseInterval
-                - util.current_time_second(),
-            )
-            if self.has_lease
-            else 0
+        return max(
+            0,
+            self.lease_access_time + self.leaseInterval - util.current_time_second(),
         )
+
+    def __renew_lease(self) -> None:
+        """Renew lease, because it can reach majority of the nodes"""
+        self.lease_access_time = util.current_time_second()
+        self.leaseInterval = LEASE_TIMEOUT
 
     def __acquire_lease(self, lease_acquire_time: int) -> None:
         """Acquire Lease"""
-        logger.DUMP_LOGGER.info("New Leader %s acquired lease.", self.my_id)
-        # TODO: Append NO-OP
         self.has_lease = True
+        logger.DUMP_LOGGER.info("New Leader %s acquired lease.", self.my_id)
+        self.__append_entry(command.Command(command.CommandType.NOOP, self.currentTerm))
         self.lease_access_time = lease_acquire_time
         self.leaseInterval = LEASE_TIMEOUT
         self.__send_heartbeat()
 
-    def __renew_lease(self, lease_acquire_time) -> bool:
-        """Renew Lease, if possible"""
-        assert (
-            self.state == State.LEADER
-        ), f"State Must be leader. But it is {self.state} at node {self.my_id}"
-        renewed = False
-        if self.has_lease or (
-            (lease_acquire_time - self.lease_access_time) > self.leaseInterval
-        ):
-            logger.DUMP_LOGGER.info("New Leader %s renewed lease.", self.my_id)
-            self.__acquire_lease(lease_acquire_time)
-            renewed = True
-        else:
-            logger.DUMP_LOGGER.info(
-                "New Leader %s waiting for Old Leader Lease to timeout.", self.my_id
-            )
-        return renewed
-
-    def __check_lease(self, curr_time) -> bool:
+    def __action_on_lease(self, curr_time) -> bool:
         """Updates lease, if conditions satisfy"""
-        has_lease = False
-        if self.state == State.LEADER:
-            if self.has_lease:
-                # Check if lease expired
-                if (curr_time - self.lease_access_time) > self.leaseInterval:
+        if (curr_time - self.lease_access_time) >= self.leaseInterval:
+            if self.state == State.LEADER:
+                if self.has_lease:
                     self.has_lease = False
                     logger.DUMP_LOGGER.info(
                         "Leader %s lease renewal failed. Stepping Down.", self.my_id
                     )
                     self.__change_state_to_follower(
-                        self.currentTerm, 0, "LeaseExapired"
+                        self.currentTerm, 0, "UnableToRenewLease"
                     )
-            else:
-                self.__renew_lease(curr_time)
-
-        if (curr_time - self.lease_access_time) > self.leaseInterval:
-            if self.state == State.LEADER:
-                if self.has_lease:
-                    self.has_lease = False
-                    self.__change_state_to_follower(self.currentTerm, 0, "LeaseExapire")
                 else:
+                    # Doesn't have the lease and lease expires => No one else has the lease => acquire the lease
                     self.__acquire_lease(curr_time)
-                    has_lease = True
-            else:
-                if self.has_lease:
-                    self.has_lease = False
-        return has_lease
+
+        # For other states, no need to do anything
+        return self.has_lease
 
     def __get_last_log_index(self) -> int:
         """Returns last log index"""
@@ -313,19 +295,20 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     def __change_state_to_leader(self):
         """Change state to leader"""
+        # TODO: Pass lease information
         self.state = State.LEADER
         self.leaderId = self.my_id
-        self.has_lease = True  # TODO: Change it while implementing lease
+        self.has_lease = False  # TODO: Change it while implementing lease
         logger.DUMP_LOGGER.info(
             "Node %s became the leader for term %s.", self.my_id, self.currentTerm
         )
         self.nextIndex = [len(self.logs)] * len(self.peers)
         # self.matchIndex =  TODO: Set it
-        self.__append_entry(command.Command(command.CommandType.NOOP, self.currentTerm))
-        # Already persisted in the above step.
-        self.__send_heartbeat()
-        # if not self.__renew_lease(util.current_time_second()):
-        #    self.__send_heartbeat()
+        logger.DUMP_LOGGER.info(
+            "New Leader waiting for Old Leader Lease to timeout. Duration: %s",
+            self.__get_lease_duration(),
+        )
+        self.__action_on_lease(util.current_time_second())
 
     def __change_state_to_follower(
         self, term: int, lease_remaining_duration: int, why: str
@@ -363,7 +346,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 if self.lastApplied < self.commitIndex:
                     logs_to_apply = self.logs[self.lastApplied : self.commitIndex]
                     indices = list(i for i in range(self.lastApplied, self.commitIndex))
-                    logger.DUMP_LOGGER.debug(
+                    logger.DUMP_LOGGER.info(
                         "Appying logs from %s to %s. indices [%s] logs [%s]",
                         self.lastApplied,
                         self.commitIndex,
@@ -449,49 +432,45 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     def __send_request_vote(self, node_id: int, args: raft_pb2.RequestVoteArgs) -> None:
         """Sends request vote"""
-        """logger.DUMP_LOGGER.info(
-            "Sending RequestVote to id %s address %s",
-            node_id,
-            self.peers[node_id]
-            # args,
-        )"""
         try:
             with grpc.insecure_channel(self.peers[node_id]) as channel:
                 stub = raft_pb2_grpc.RaftServiceStub(channel)
-                reply = stub.RequestVote(args)
+                reply = stub.RequestVote(args, timeout=REQUEST_VOTE_TIMEOUT)
         except grpc.RpcError as err:
             if err.code() == grpc.StatusCode.UNAVAILABLE:
                 logger.DUMP_LOGGER.error(
-                    "RequestVote RPC fail. Node not available %s", node_id
+                    "Error occurred while sending RequestVote RPC to Node %s. UNAVAILABLE",
+                    node_id,
+                )
+            elif err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending RequestVote RPC to Node %s. DEADLINE_EXCEEDED",
+                    node_id,
                 )
             else:
                 logger.DUMP_LOGGER.error(
-                    "Error occurred while sending RPC to Node %s. RequestVote. Error: %s",
+                    "Error occurred while sending RequestVote RPC to Node %s. Unknown. Error: %s",
                     node_id,
-                    str(err.args),
+                    str(err),
                 )
             return
+
         with self.mutex:
             if (self.state != State.CANDIDATE) or (self.currentTerm != args.term):
                 # Reply comes after a long time
                 return
 
+            self.__update_lease(
+                util.current_time_second(), reply.leaseRemainingDuration
+            )
             if not reply.voteGranted:
                 if self.currentTerm < reply.term:
                     # It is another term, so the other node has updated information about the lease
                     self.__change_state_to_follower(
                         reply.term, reply.leaseRemainingDuration, "HigherTermExists"
                     )
-                else:
-                    self.__update_lease(
-                        util.current_time_second(),
-                        max(self.leaseInterval, reply.leaseRemainingDuration),
-                    )
                 return
-            self.__update_lease(
-                util.current_time_second(),
-                max(self.leaseInterval, reply.leaseRemainingDuration),
-            )
+
             self.votes_received += 1
             if self.votes_received > (len(self.peers) / 2):
                 self.__change_state_to_leader()
@@ -519,10 +498,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             self.__update_timer(self.__election_timeout())
 
             logger.DUMP_LOGGER.debug(
-                "AppendEntries prevLogindex: %s term: %s commitIndex %s",
+                "AppendEntries prevLogindex: %s term: %s commitIndex %s leaseRemaining %s",
                 request.prevLogIndex,
                 request.prevLogTerm,
                 request.leaderCommit,
+                request.leaseRemainingDuration,
             )
             # if request.prevLogIndex == -1 and request.prevLogTerm == -1:
             # This case arises, when the LEADER's log is empty.
@@ -555,8 +535,10 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                         reply.conflictIndex = idx
                         idx -= 1
                     reply.success = False
-                    logger.DUMP_LOGGER.debug(
-                        "AppendEntry Fails. conflictIndex: %s conflictTerm: %s",
+                    logger.DUMP_LOGGER.info(
+                        "Node %s rejected AppendEntries RPC from %s. conflictIndex: %s conflictTerm: %s",
+                        self.my_id,
+                        self.leaderId,
                         reply.conflictIndex,
                         reply.conflictTerm,
                     )
@@ -573,9 +555,10 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 if log_cut or (len(leader_logs) > 0):
                     self.__persist()
                     logger.DUMP_LOGGER.info(
-                        "AppendEntry appened logs. cut %s size %s. Logs: [%s]",
+                        "Node %s accepted AppendEntries RPC from %s. cut %s Logs: [%s]",
+                        self.my_id,
+                        self.leaderId,
                         log_cut,
-                        len(leader_logs),
                         "][".join(list(map(str, self.logs))),
                     )
                 else:
@@ -587,18 +570,27 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 if request.leaderCommit > self.commitIndex:
                     new_commit_idx = min(request.leaderCommit, len(self.logs))
                     if self.commitIndex != new_commit_idx:
+                        committing_entries = self.logs[
+                            self.commitIndex : new_commit_idx
+                        ]
                         self.commitIndex = new_commit_idx
                         self.__persist()
-                        logger.DUMP_LOGGER.debug(
-                            "CommitIndex updated to %s", self.commitIndex
+                        logger.DUMP_LOGGER.info(
+                            "Node %s (follower) committed the entry [%s] to the state machine.",
+                            self.my_id,
+                            "][".join(map(str, committing_entries)),
                         )
                 reply.success = True
                 return reply
             else:
                 # Index not exist
                 # The index next to the last entry, i.e. size
-                logger.DUMP_LOGGER.debug(
-                    "AppendEntry Fails. conflictIndex: %s", reply.conflictIndex
+                logger.DUMP_LOGGER.info(
+                    "Node %s rejected AppendEntries RPC from %s. conflictIndex: %s conflictTerm: %s",
+                    self.my_id,
+                    self.leaderId,
+                    reply.conflictIndex,
+                    reply.conflictTerm,
                 )
                 reply.conflictIndex = len(self.logs)
                 reply.success = False
@@ -623,28 +615,37 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             try:
                 with grpc.insecure_channel(self.peers[node_id]) as channel:
                     stub = raft_pb2_grpc.RaftServiceStub(channel)
-                    reply = stub.AppendEntries(args)
+                    reply = stub.AppendEntries(args, timeout=APPEND_ENTRY_TIMEOUT)
                     success = True
             except grpc.RpcError as err:
                 if err.code() == grpc.StatusCode.UNAVAILABLE:
                     logger.DUMP_LOGGER.error(
-                        "AppendEntry RPC fail. Node not available %s", node_id
+                        "Error occurred while sending AppendEntries RPC to Node %s. UNAVAILABLE",
+                        node_id,
+                    )
+                elif err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+                    logger.DUMP_LOGGER.error(
+                        "Error occurred while sending AppendEntries RPC to Node %s. DEADLINE_EXCEEDED",
+                        node_id,
                     )
                 else:
                     logger.DUMP_LOGGER.error(
-                        "Error occurred while sending RPC to Node %s. AppendEntries. Error: %s",
+                        "Error occurred while sending AppendEntries RPC to Node %s. Unknown. Error: %s",
                         node_id,
                         str(err),
                         # str(err.args),
                     )
-                return  # TODO: Remove it after testing
-                if heartbeat:
-                    # Don't try for heartbeat message
-                    return
+                # Don't try here. Send on next message
+                return
+
         with self.mutex:
             if not self.active or self.state != State.LEADER:
                 # Lease
                 return
+            self.reachability_nodes_cnt += 1
+            if self.reachability_nodes_cnt > (len(self.peers) / 2):
+                self.__renew_lease()
+
             if reply.success:
                 # TODO: ignore if it is an old rpc
                 self.nextIndex[node_id] += len(args.entries)
@@ -688,9 +689,15 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 # Take the max index
                 if len(majority_indices) == 0:
                     return
-                self.commitIndex = max(majority_indices)
+                new_commit_idx = max(majority_indices)
+                committing_entries = self.logs[self.commitIndex : new_commit_idx]
+                self.commitIndex = new_commit_idx
                 self.__persist()
-                logger.DUMP_LOGGER.debug("NEWCOMMITIDx  %s", self.commitIndex)
+                logger.DUMP_LOGGER.info(
+                    "Node %s (leader) committed the entry [%s] to the state machine.",
+                    self.my_id,
+                    "][".join(map(str, committing_entries)),
+                )
                 return
 
             if reply.term > self.currentTerm:
@@ -719,14 +726,20 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     def __send_heartbeat(self) -> None:
         """Sends heartbeat to peers"""
+        if not self.has_lease:
+            # Although it is a double check, but keep it.
+            return
+
+        # Reset lease counter
+        self.reachability_nodes_cnt = 1  # can reach to self
+
         logger.DUMP_LOGGER.info(
             "Leader %s sending heartbeat & Renewing Lease", self.my_id
         )
-        logger.DUMP_LOGGER.debug("logs: [%s]", "][".join(map(str, self.logs)))
+        # logger.DUMP_LOGGER.debug("logs: [%s]", "][".join(map(str, self.logs)))
         for peer_id in range(len(self.peers)):
             if peer_id == self.my_id:
                 continue
-            # TODO: Add lease time
 
             prevIndex = self.nextIndex[peer_id] - 1
             prevTerm = -1 if prevIndex < 0 else self.logs[prevIndex].term
@@ -737,11 +750,9 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 prevLogIndex=prevIndex,
                 prevLogTerm=prevTerm,
                 leaderCommit=self.commitIndex,
+                leaseRemainingDuration=self.__get_lease_duration(),
             )
-            # if len(self.logs) > self.nextIndex[peer_id]:
-            #    log_to_send = self.logs[self.nextIndex[peer_id]:]
-            #    args.entries.extend(log_to_send)
-            # logs_to_send = self.logs[max(0, prevIndex):]
+
             logs_to_send = self.logs[prevIndex + 1 :]
             logs_in_pb2 = list(
                 map(
@@ -751,12 +762,11 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
             )
             args.entries.extend(logs_in_pb2)
             logger.DUMP_LOGGER.debug(
-                "Sending HB to node %s, MyLoglen %s, nextIdx %s Log [%s]",
+                "Sending HB to node %s, MyLoglen %s, nextIdx %s sendingLogs [%s]",
                 peer_id,
                 len(self.logs),
                 self.nextIndex[peer_id],
                 "][".join(map(str, logs_to_send)),
-                # len(args.entries),
             )
             self.executor.submit(
                 self.send_append_entries, peer_id, args, len(args.entries) > 0
@@ -781,11 +791,12 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 break
             with self.mutex:
                 curr_time = util.current_time_second()
-                # self.__check_lease(curr_time)
+                self.__action_on_lease(curr_time)
                 if (self.last_heartbeat + self.wait_duration) <= curr_time:
                     if self.state == State.LEADER:
-                        self.__send_heartbeat()
-                        self.__update_timer(HEARTBEAT_TIMEOUT)
+                        if self.has_lease:
+                            self.__send_heartbeat()
+                            self.__update_timer(HEARTBEAT_TIMEOUT)
                     else:
                         self.__initiate_election()
                         self.__update_timer(self.__election_timeout())

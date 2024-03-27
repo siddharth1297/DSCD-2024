@@ -38,10 +38,10 @@ Put(key, value) RPC:
 
 Lease can only be hold by the node which can send appendEntries to majority of the nodes.
 
-1. Wheneever a candidate gets majority number of votes, it becomes the leader.
+1. Whenever a candidate gets majority number of votes, it becomes the leader.
 It doesn't send the establishment of the authority immediately, rather waits for the maximum remaining lease interval.
 
-2. Once the last lease times out, then the leader appends NO-OP to its log and broadcast the heartbeat message along with is NO-OP entry(Now it is no more a heartbeat message rather an appendEntry) in the log and with the remaining lease time(~10S in this case).
+2. Once the maximum lease times out, then the leader appends NO-OP to its log and broadcast the heartbeat message along with is NO-OP entry(Now it is no more a heartbeat message rather an appendEntry) in the log and with the remaining lease time(~5S in this case).
 
 3. If it gets majority, on any appendEntry message(i.e both heartbeat and appendEntry), it renews the lease.
 
@@ -49,6 +49,8 @@ It doesn't send the establishment of the authority immediately, rather waits for
 
 ### Test the following
 
+Add timeout to all the RPCs.
 Make deep copy of the command, before calling the appendEntry from the KVServer.
 Log index with different term.
-Wriiten to log, but because of timeout, client gets FAIL message while setting a key.
+Written to log, but because of timeout, client gets FAIL message while setting a key.
+dump just after appen or after committed.

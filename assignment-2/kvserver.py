@@ -30,7 +30,9 @@ class KVErrors(enum.Enum):
     LEADER_UNKNOWN = "LEADER_UNKNOWN"  # leaderId is set to -1
     LEADER_WITHOUT_LEASE = "LEADER_WITHOUT_LEASE"  #
     RAFT_ERROR = "RAFT_ERROR"  # some error in the raft module.
-    KEY_NOT_PRESENT = "KEY_NOT_PRESENT"
+    KEY_NOT_PRESENT = (
+        "KEY_NOT_PRESENT"  # This is not a server error. But just for simplicity
+    )
     OP_TIME_OUT = "OP_TIME_OUT"
     CMD_CHANGED = (
         "CMD_CHANGED"  # Happens while consolidating logs after network partition heals
@@ -173,7 +175,9 @@ class KVServer:
 
     def Set(self, request: kv_pb2.SetArgs, context) -> kv_pb2.SetReply:
         """KV Set RPC"""
-        logger.DUMP_LOGGER.info("START SET %s %s", request.key, request.value)
+        logger.DUMP_LOGGER.info(
+            "Received an request. SET %s %s", request.key, request.value
+        )
         cmd = command.Command(
             command.CommandType.SET, term=-1, key=request.key, value=request.value
         )
@@ -194,7 +198,7 @@ class KVServer:
 
         status, error = self.__wait_for_apply(log_idx, cmd)
         logger.DUMP_LOGGER.info(
-            "END SET %s %s status %s error: %s",
+            "SET Return. key: %s value: %s. status: %s error: %s",
             request.key,
             request.value,
             status,
@@ -207,10 +211,10 @@ class KVServer:
         is_leader, has_lease, leader_id = self.raft.is_leader_with_lease()
         value = None
         if is_leader and has_lease:
-            logger.DUMP_LOGGER.debug("Get Request. key: %s", request.key)
+            logger.DUMP_LOGGER.info("Received an request. GET %s", request.key)
             status, value = self.__get_value(request.key)
-            logger.DUMP_LOGGER.debug(
-                "Get Request. key: %s value: %s. status: %s", request.key, value, status
+            logger.DUMP_LOGGER.info(
+                "GET Return. key: %s value: %s. status: %s", request.key, value, status
             )
             if status:
                 return kv_pb2.GetReply(status=True, value=value)
