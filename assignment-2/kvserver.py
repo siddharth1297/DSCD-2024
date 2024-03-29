@@ -176,7 +176,7 @@ class KVServer:
     def Set(self, request: kv_pb2.SetArgs, context) -> kv_pb2.SetReply:
         """KV Set RPC"""
         logger.DUMP_LOGGER.info(
-            "Received an request. SET %s %s", request.key, request.value
+            "Received a request. SET %s %s", request.key, request.value
         )
         cmd = command.Command(
             command.CommandType.SET, term=-1, key=request.key, value=request.value
@@ -211,7 +211,7 @@ class KVServer:
         is_leader, has_lease, leader_id = self.raft.is_leader_with_lease()
         value = None
         if is_leader and has_lease:
-            logger.DUMP_LOGGER.info("Received an request. GET %s", request.key)
+            logger.DUMP_LOGGER.info("Received a request. GET %s", request.key)
             status, value = self.__get_value(request.key)
             logger.DUMP_LOGGER.info(
                 "GET Return. key: %s value: %s. status: %s", request.key, value, status
