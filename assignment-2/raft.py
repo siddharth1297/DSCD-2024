@@ -416,6 +416,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.currentTerm += 1
         self.votedFor = self.my_id
         self.votes_received = 1
+        self.leaderId = -1
         self.__persist()
         # pylint: disable=no-member
         args = raft_pb2.RequestVoteArgs()
