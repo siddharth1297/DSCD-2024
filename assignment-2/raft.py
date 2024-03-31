@@ -97,7 +97,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.timer_thread = threading.Thread(target=self.__timer)
 
         self.__replay()
-        self.__change_state_to_follower(self.currentTerm, self.currentTerm, "StartUp")
+        self.__change_state_to_follower(self.currentTerm, 0, "StartUp")
         self.apply_thread.start()
         time.sleep(1)  # Let apply the logs
         self.__serve()
@@ -392,9 +392,9 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 self.votedFor = request.candidateId
                 self.__persist()
                 logger.DUMP_LOGGER.info(
-                    "Vote granted for Node %s in term %s.",
+                    "Vote granted for Node %s in term %s. LeaseDuration %s",
                     request.candidateId,
-                    request.term,
+                    request.term, reply.leaseRemainingDuration
                 )
                 self.__update_timer(self.__election_timeout())
             else:
