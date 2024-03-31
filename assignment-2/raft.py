@@ -743,6 +743,9 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
                 continue
 
             prevIndex = self.nextIndex[peer_id] - 1
+            if prevIndex >= len(self.logs) :
+                logger.DUMP_LOGGER.error("CRASH. nodeId %s logLen %s prevIdx %s nextIdx [%s]", peer_id, len(self.logs), prevIndex, "][".join(map(str, self.nextIndex)))
+                print("CRASH. nodeId %s logLen %s prevIdx %s nextIdx [%s]", peer_id, len(self.logs), prevIndex, "][".join(map(str, self.nextIndex)))
             prevTerm = -1 if prevIndex < 0 else self.logs[prevIndex].term
 
             args = raft_pb2.AppendEntriesArgs(

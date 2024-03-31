@@ -15,7 +15,7 @@ import util
 import raft
 import kvserver
 
-LOGGING_LEVEL = logging.INFO
+LOGGING_LEVEL = logging.DEBUG
 
 RF = None
 KV = None
