@@ -45,8 +45,8 @@ class KVServer:
     def __init__(
         self,
         node_id: int,
-        raft_cluster: list[str],
-        kv_cluster: list[str],
+        raft_cluster: typing.List[str],
+        kv_cluster: typing.List[str],
     ):
         self.my_id = node_id
         self.raft_cluster = raft_cluster

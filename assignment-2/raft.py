@@ -50,7 +50,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
 
     # pylint: disable=too-many-instance-attributes,invalid-name
 
-    def __init__(self, node_id: int, peers: list[str], kv, **kwargs):
+    def __init__(self, node_id: int, peers: typing.List[str], kv, **kwargs):
         self.my_id = node_id
         self.peers = peers
         self.server_port = peers[self.my_id].split(":")[1]
@@ -119,7 +119,7 @@ class Raft(raft_pb2_grpc.RaftServiceServicer):
         self.active = False
         self.timer_thread.join()
         self.server.stop(1.5).wait()
-        self.executor.shutdown(wait=True, cancel_futures=True)
+        self.executor.shutdown(wait=True) # cancel_futures=True is for >= Python-3.9
         self.apply_thread.join()
 
         os.fsync(self.metadata_fd)
