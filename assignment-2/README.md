@@ -44,13 +44,3 @@ It doesn't send the establishment of the authority immediately, rather waits for
 2. Once the maximum lease times out, then the leader appends NO-OP to its log and broadcast the heartbeat message along with is NO-OP entry(Now it is no more a heartbeat message rather an appendEntry) in the log and with the remaining lease time(~5S in this case).
 
 3. If it gets majority, on any appendEntry message(i.e both heartbeat and appendEntry), it renews the lease.
-
-## TODO
-
-### Test the following
-
-Add timeout to all the RPCs.
-Make deep copy of the command, before calling the appendEntry from the KVServer.
-Log index with different term.
-Written to log, but because of timeout, client gets FAIL message while setting a key.
-dump just after appen or after committed.
