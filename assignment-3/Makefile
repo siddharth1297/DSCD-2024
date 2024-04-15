@@ -4,6 +4,7 @@ SRC = run_master.py master.py logger.py worker.py
 
 PYLINT_IGNORE=too-many-instance-attributes
 
+
 protoc:
 	python3 -m grpc_tools.protoc -I./protos --python_out=$(PROTO_OUT) --grpc_python_out=$(PROTO_OUT) \
 		./protos/master.proto
