@@ -176,3 +176,7 @@ cython_debug/
 # Assignment-2 logs file
 assignment-2/logs_node_*
 assignment-2/*.tmp
+
+# Assignment-3 logs file
+assignment-3/logs/*
+assignment-3/*.tmp
