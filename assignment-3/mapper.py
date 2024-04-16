@@ -2,6 +2,7 @@
 MapReduce Worker
 """
 
+import os
 import argparse
 import logging
 import time
@@ -25,10 +26,79 @@ class MapTask:
         self.n_reduce = n_reduce
         self.centroids = centroids
         self.filename = filename
-    
-    # def begin_map_task(self):
 
+        self.output_file_list_path = []
+
+    '''Stores points in a list of tuples'''
+    def read_points_from_file(self):
+        points = []
+        with open(self.filename, 'r') as file:
+            for line in file:
+                parts = line.strip().split(', ')
+                if len(parts) == 2:
+                    x, y = parts
+                    points.append((float(x), float(y)))
+        return points[self.start_idx: self.end_idx]
+    
+    '''Groups points into k clusters'''
+    def cluster_points(self, points):
+        points_list_clustered = []
+        for point in self.points:
+            min_distance = float('inf')
+            closest_centroid_index = -1
+            for idx, centroid in enumerate(self.centroids):
+                distance = (point[0] - centroid[0]) ** 2 + (point[1] - centroid[1]) ** 2
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_centroid_index = idx
+            points_list_clustered.append((closest_centroid_index, (point, 1)))
+        return points_list_clustered
+    
+    '''Create Mappers directory if not already created'''
+    def create_mappers_directory():
+        directory = 'Mappers'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            logger.DUMP_LOGGER.info(f"Directory '{directory}' created.")
+        else:
+            logger.DUMP_LOGGER.info(f"Directory '{directory}' already exists.")
+    
+    '''Create Folder for the current Map Task'''
+    def create_map_folder(self):
+        folder_name = f"M{self.map_id}"
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+            logger.DUMP_LOGGER.info(f"Folder '{folder_name}' created.")
+        else:
+            logger.DUMP_LOGGER.info(f"Folder '{folder_name}' already exists.")
+    
+    '''Partition the points into R files'''
+    def partition_points(self):
+        partitions = {}
+        for key, (point, frequency) in self.points_list_clustered:
+            partition_key = key % self.n_reduce
+            if partition_key not in partitions:
+                partitions[partition_key] = []
+            partitions[partition_key].append((key, (point, frequency)))
         
+        file_namer=0
+        
+        for partition_key, partition_points in partitions.items():
+            partition_filename = f"/Mappers/M{self.map_id}/partition_{file_namer}.txt"
+            self.output_file_list_path.append(partition_filename)
+            file_namer+=1
+            with open(partition_filename, 'w') as partition_file:
+                for key, ((x, y), frequency) in partition_points:
+                    partition_file.write(f"({key},(({x},{y}), 1))\n")
+
+    def begin_map_task(self):
+        points_list = self.read_points_from_file()
+        points_list_clustered = self.cluster_points(points_list)
+        self.create_mappers_directory()
+        self.create_map_folder()
+        self.partition_points()
+
+                
     @classmethod
     def from_request(cls, request):
         return cls(
@@ -40,9 +110,7 @@ class MapTask:
             filename=request.filename
         )
 
-    def __str__(self):
-        return f"MapTask(map_id={self.map_id}, start_idx={self.start_idx}, end_idx={self.end_idx}, n_reduce={self.n_reduce}, centroids={self.centroids}, filename={self.filename})"
-
+    
 class Mapper (mapper_pb2_grpc.MapperServicesServicer):
     """MapReduce Worker"""
 
@@ -56,9 +124,12 @@ class Mapper (mapper_pb2_grpc.MapperServicesServicer):
     def DoMap(self, request, context):
         """Implement the DoMap RPC method"""
         
+        
         map_task = MapTask.from_request(request)
-        MapTask.begin_map_task(map_task)
-
+        map_task.begin_map_task(map_task)
+        
+        response = mapper_pb2.DoMapTaskReply(map_task.output_file_list_path)
+        context.send_response(response)
 
         pass
 
@@ -70,42 +141,11 @@ class Mapper (mapper_pb2_grpc.MapperServicesServicer):
     def serve(self) -> None:
         self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
         mapper_pb2_grpc.add_MapperServicesServicer_to_server(self, self.grpc_server)
-        self.grpc_server.add_insecure_port("0.0.0.0" + ":" + self.worker_port)
+        self.grpc_server.add_insecure_port("0.0.0.0" + ":" + str(self.worker_port))
         self.grpc_server.start()
         logger.DUMP_LOGGER.info("Mapper Worker %s started at port %s",self.worker_id, self.port)
         
 
-    # def run(self) -> None:
-    #     """Run indefinitely"""
-    #     while True:
-    #         job = self.__ask_for_job()
-    #         if job.job_type == master_pb2.JobType.EXIT:
-    #             logger.DUMP_LOGGER.info("Exiting")
-    #             break
-    #         if job.job_type == master_pb2.JobType.NO_JOB:
-    #             logger.DUMP_LOGGER.info("No job")
-    #             time.sleep(SLEEP_TIME)
-    #             continue
-
-    # def __ask_for_job(self) -> master_pb2.GetJobReply:
-    #     """Asks master for job"""
-    #     logger.DUMP_LOGGER.info("Asking master for job")
-    #     args = master_pb2.GetJobArgs(
-    #         worker_id=self.worker_id, worker_addr=self.server_addr
-    #     )
-    #     try:
-    #         with grpc.insecure_channel(self.master_addr) as channel:
-    #             stub = master_pb2_grpc.MasterServicesStub(channel)
-    #             reply = stub.GetJob(args)
-    #     except grpc.RpcError as err:
-    #         if err.code() == grpc.StatusCode.UNAVAILABLE:
-    #             logger.DUMP_LOGGER.error("Error RPC GetJob. UNAVAILABLE")
-    #         else:
-    #             logger.DUMP_LOGGER.error("Error RPC GetJob. Unknown. %s", str(err))
-    #         return master_pb2.GetJobReply(job_type=master_pb2.JobType.EXIT)
-
-    #     logger.DUMP_LOGGER.info("Got job of type %s.", reply.job_type)
-    #     return reply
 
 
 if __name__ == "__main__":
