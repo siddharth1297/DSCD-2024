@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package MapReduce;
+
+service MapperServices {
+    rpc DoMap(DoMapTaskArgs) returns(DoMapTaskReply);
+    rpc GetData(GetDataArgs) returns(GetDataReply);
+}
+
+message DoMapTaskArgs {
+    int32 map_id = 1;
+    int32 start_idx = 2;
+    int32 end_idx = 3;
+    int n_reduce = 4;
+    repeated int centroids = 5;
+    string filename = 6;
+}
+
+message DoMapTaskReply {
+    repeated string files = 1;
+}
+
+message GetDataArgs {
+
+}
+
+message GetDataReply {
+
+}

@@ -14,17 +14,28 @@ class MasterServicesStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.GetJob = channel.unary_unary(
-                '/MapReduce.MasterServices/GetJob',
-                request_serializer=master__pb2.GetJobArgs.SerializeToString,
-                response_deserializer=master__pb2.GetJobReply.FromString,
+        self.SubmitMapJob = channel.unary_unary(
+                '/MapReduce.MasterServices/SubmitMapJob',
+                request_serializer=master__pb2.SubmitMapJobArgs.SerializeToString,
+                response_deserializer=master__pb2.SubmitMapReply.FromString,
+                )
+        self.SubmitReduceJob = channel.unary_unary(
+                '/MapReduce.MasterServices/SubmitReduceJob',
+                request_serializer=master__pb2.SubmitReduceJobArgs.SerializeToString,
+                response_deserializer=master__pb2.SubmitReduceReply.FromString,
                 )
 
 
 class MasterServicesServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def GetJob(self, request, context):
+    def SubmitMapJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SubmitReduceJob(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -33,10 +44,15 @@ class MasterServicesServicer(object):
 
 def add_MasterServicesServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'GetJob': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetJob,
-                    request_deserializer=master__pb2.GetJobArgs.FromString,
-                    response_serializer=master__pb2.GetJobReply.SerializeToString,
+            'SubmitMapJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitMapJob,
+                    request_deserializer=master__pb2.SubmitMapJobArgs.FromString,
+                    response_serializer=master__pb2.SubmitMapReply.SerializeToString,
+            ),
+            'SubmitReduceJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitReduceJob,
+                    request_deserializer=master__pb2.SubmitReduceJobArgs.FromString,
+                    response_serializer=master__pb2.SubmitReduceReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -49,7 +65,7 @@ class MasterServices(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def GetJob(request,
+    def SubmitMapJob(request,
             target,
             options=(),
             channel_credentials=None,
@@ -59,8 +75,25 @@ class MasterServices(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/MapReduce.MasterServices/GetJob',
-            master__pb2.GetJobArgs.SerializeToString,
-            master__pb2.GetJobReply.FromString,
+        return grpc.experimental.unary_unary(request, target, '/MapReduce.MasterServices/SubmitMapJob',
+            master__pb2.SubmitMapJobArgs.SerializeToString,
+            master__pb2.SubmitMapReply.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SubmitReduceJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/MapReduce.MasterServices/SubmitReduceJob',
+            master__pb2.SubmitReduceJobArgs.SerializeToString,
+            master__pb2.SubmitReduceReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

@@ -3,21 +3,20 @@ syntax = "proto3";
 package MapReduce;
 
 service MasterServices {
-    rpc GetJob(GetJobArgs) returns (GetJobReply);
+    rpc SubmitMapJob(SubmitMapJobArgs) returns (SubmitMapReply);
+    rpc SubmitReduceJob(SubmitReduceJobArgs) returns (SubmitReduceReply);
 }
 
-enum JobType {
-    NO_JOB = 0;
-    EXIT = 1;
-    MAP = 2;
-    REDUCE = 3;
-}
-
-message GetJobArgs {
+message SubmitMapJobArgs {
     int32 worker_id = 1;
-    string worker_addr = 2;
 }
 
-message GetJobReply {
-    JobType job_type = 1;
+message SubmitMapReply {
+}
+
+message SubmitReduceJobArgs {
+    int32 worker_id = 1;
+}
+
+message SubmitReduceReply {
 }

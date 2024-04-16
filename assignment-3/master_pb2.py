@@ -14,19 +14,21 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cmaster.proto\x12\tMapReduce\"4\n\nGetJobArgs\x12\x11\n\tworker_id\x18\x01 \x01(\x05\x12\x13\n\x0bworker_addr\x18\x02 \x01(\t\"3\n\x0bGetJobReply\x12$\n\x08job_type\x18\x01 \x01(\x0e\x32\x12.MapReduce.JobType*4\n\x07JobType\x12\n\n\x06NO_JOB\x10\x00\x12\x08\n\x04\x45XIT\x10\x01\x12\x07\n\x03MAP\x10\x02\x12\n\n\x06REDUCE\x10\x03\x32I\n\x0eMasterServices\x12\x37\n\x06GetJob\x12\x15.MapReduce.GetJobArgs\x1a\x16.MapReduce.GetJobReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cmaster.proto\x12\tMapReduce\"%\n\x10SubmitMapJobArgs\x12\x11\n\tworker_id\x18\x01 \x01(\x05\"\x10\n\x0eSubmitMapReply\"(\n\x13SubmitReduceJobArgs\x12\x11\n\tworker_id\x18\x01 \x01(\x05\"\x13\n\x11SubmitReduceReply2\xa9\x01\n\x0eMasterServices\x12\x46\n\x0cSubmitMapJob\x12\x1b.MapReduce.SubmitMapJobArgs\x1a\x19.MapReduce.SubmitMapReply\x12O\n\x0fSubmitReduceJob\x12\x1e.MapReduce.SubmitReduceJobArgs\x1a\x1c.MapReduce.SubmitReduceReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'master_pb2', _globals)
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
-  _globals['_JOBTYPE']._serialized_start=134
-  _globals['_JOBTYPE']._serialized_end=186
-  _globals['_GETJOBARGS']._serialized_start=27
-  _globals['_GETJOBARGS']._serialized_end=79
-  _globals['_GETJOBREPLY']._serialized_start=81
-  _globals['_GETJOBREPLY']._serialized_end=132
-  _globals['_MASTERSERVICES']._serialized_start=188
-  _globals['_MASTERSERVICES']._serialized_end=261
+  _globals['_SUBMITMAPJOBARGS']._serialized_start=27
+  _globals['_SUBMITMAPJOBARGS']._serialized_end=64
+  _globals['_SUBMITMAPREPLY']._serialized_start=66
+  _globals['_SUBMITMAPREPLY']._serialized_end=82
+  _globals['_SUBMITREDUCEJOBARGS']._serialized_start=84
+  _globals['_SUBMITREDUCEJOBARGS']._serialized_end=124
+  _globals['_SUBMITREDUCEREPLY']._serialized_start=126
+  _globals['_SUBMITREDUCEREPLY']._serialized_end=145
+  _globals['_MASTERSERVICES']._serialized_start=148
+  _globals['_MASTERSERVICES']._serialized_end=317
 # @@protoc_insertion_point(module_scope)

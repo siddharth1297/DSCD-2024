@@ -5,6 +5,8 @@ import argparse
 import logging
 import time
 
+import yaml
+
 import master
 import logger
 
@@ -28,6 +30,15 @@ def main(**kwargs) -> None:
 
 
 if __name__ == "__main__":
+    with open("config.yaml", "r", encoding="UTF-8") as f:
+        config = yaml.load(f, Loader=yaml.SafeLoader)
+        master_cfg = config['master']
+        mappers = config['mappers'][:master_cfg['M']]
+        reducers = config['reducers'][:master_cfg['R']]
+        
+
+    exit(1)
+
     parser = argparse.ArgumentParser(
         description="MapReduce Master",
         epilog="$ python3 run_master.py --port 8085 -M 3 -R 2 -K 2 -I 3 -F centroid.txt",
