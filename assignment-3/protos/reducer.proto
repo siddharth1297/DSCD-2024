@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package MapReduce;
+
+service ReducerService {
+    rpc reduce (ReduceRequest) returns (ReduceResponse) {};
+}
+
+message ReduceRequest{
+    int32 query = 1;
+    repeated string partition_files_path = 2;
+    string output_location = 3;
+}
+
+message ReduceResponse{
+    enum Status {
+        FAILED = 0;
+        SUCCESS = 1;
+    }
+    Status status = 1;
+    string output_file_path = 2;
+}
