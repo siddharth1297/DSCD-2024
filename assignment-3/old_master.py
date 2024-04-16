@@ -37,8 +37,7 @@ class Task:
     def __init__(self, **kwargs):
         self.master = kwargs['master']
         self.inputfiles = [kwargs['inputfile']]
-        self.start_idx = 0
-        self.end_idx = 0
+        self.ranges = []
         self.status = TaskStatus.PENDING
 
 class Master(master_pb2_grpc.MasterServicesServicer):
@@ -65,27 +64,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         self.grpc_server = None
         self.mutex = threading.Lock()
         self.executor = futures.ThreadPoolExecutor(max(self.n_map, self.n_reduce))
-    
-    '''Counts no. of points in points.txt'''
-    def count_total_input_points(self, file_path):
-        count = 0
-        with open(file_path, 'r') as file:
-            for line in file:
-                if line.strip():  # Check if the line is not empty after stripping whitespace
-                    count += 1
-        return count
-    
-    '''Stores points in a list of tuples'''
-    def read_points_from_file(self):
-        points = []
-        with open(self.filename, 'r') as file:
-            for line in file:
-                parts = line.strip().split(', ')
-                if len(parts) == 2:
-                    x, y = parts
-                    points.append((float(x), float(y)))
-        return points
-    
+
     def start(self) -> None:
         """Start Services"""
         self.__serve()
@@ -160,28 +139,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         """run map task"""
         # TODO: Divide the jobs between the mappers
         tasks = []
-        myTask=None
-        
-        '''This loop updates ranges for each map task and stores map tasks in a list'''
-        for i in range(len(self.n_map)):
-            '''To Split the data between map jobs'''
-            total_points=self.count_total_input_points('/inputs/point.txt')
-            range_incr= total_points/self.n_map
-            myTask = Task() 
-            myTask.start_idx=i*range_incr
-            myTask.end_idx=i*range_incr + range_incr 
-            tasks.append(myTask)
-        
         while True:
             completed = False
             for i in range(len(self.n_map)):
                 self.mutex.locked()
                 if task.status in (TaskStatus.PENDING, TaskStatus.FAILED):
                     task = tasks[i]
-                    arg = mapper_pb2.DoMapTaskArgs(map_id=i, start_idx=myTask.start_idx, end_idx=myTask.end_idx, n_reduce = self.n_reduce, centroids = self.read_points_from_file[0:self.n_centroids], filename = self.ip_file)
+                    arg = mapper_pb2.DoMapTaskArgs()
                     task.status = TaskStatus.RUNNING
                     self.executor.submit(self.__submit_map_task, task, arg, i)
-                completed = completed and (task.status == TaskStatus.COMPLETED)
+                completed = completed and (task.tatus == TaskStatus.COMPLETED)
                 self.mutex.release()
                 if completed:
                     break
@@ -220,7 +187,5 @@ if __name__ == "__main__":
 
     logger.set_logger("logs/", "master.txt", "master", LOGGING_LEVEL)
     master = Master(**master_cfg, mappers=mappers, reducers=reducers)
-    '''gRPC server started'''
-    master.start() 
-    '''k-means pipeline started'''
+    master.start()
     master.run()

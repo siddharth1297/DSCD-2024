@@ -128,7 +128,7 @@ class Mapper (mapper_pb2_grpc.MapperServicesServicer):
         map_task = MapTask.from_request(request)
         map_task.begin_map_task(map_task)
         
-        response = mapper_pb2.DoMapTaskReply(map_task.output_file_list_path)
+        response = mapper_pb2.DoMapTaskReply(files = map_task.output_file_list_path, worker_id = self.worker_id)
         context.send_response(response)
 
         pass
@@ -139,11 +139,20 @@ class Mapper (mapper_pb2_grpc.MapperServicesServicer):
         pass
     
     def serve(self) -> None:
-        self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        self.grpc_server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=1),
+            options=(("grpc.so_reuseport", 0),),
+        )
         mapper_pb2_grpc.add_MapperServicesServicer_to_server(self, self.grpc_server)
         self.grpc_server.add_insecure_port("0.0.0.0" + ":" + str(self.worker_port))
         self.grpc_server.start()
-        logger.DUMP_LOGGER.info("Mapper Worker %s started at port %s",self.worker_id, self.port)
+        logger.DUMP_LOGGER.info("Mapper Worker %s started at port %s",self.worker_id, self.worker_port)
+
+        try:
+            while True:
+                time.sleep(86400)  # Sleep for 24 hours or until interrupted
+        except KeyboardInterrupt:
+                self.grpc_server.stop(0)
         
 
 
