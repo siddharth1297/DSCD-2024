@@ -3,16 +3,16 @@ syntax = "proto3";
 package MapReduce;
 
 service ReducerService {
-    rpc reduce (ReduceRequest) returns (ReduceResponse) {};
+    rpc DoReduce (DoReduceTaskArgs) returns (DoReduceTaskReply) {};
 }
 
-message ReduceRequest{
+message DoReduceTaskArgs {
     int32 query = 1;
     repeated string partition_files_path = 2;
     string output_location = 3;
 }
 
-message ReduceResponse{
+message DoReduceTaskReply {
     enum Status {
         FAILED = 0;
         SUCCESS = 1;
