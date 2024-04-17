@@ -26,6 +26,7 @@ LOGGING_LEVEL = logging.DEBUG
 MAX_WORKERS = 2
 DEFAULT_MAP_TIMEOUT = 30  # second
 DEFAULT_REDUCE_TIMEOUT = 30  # second
+SLEEP_TIME = 3
 
 
 class TaskStatus(enum.Enum):
@@ -53,9 +54,10 @@ class Task:
         self.start_idx = kwargs["start_idx"]  # inclusive
         self.end_idx = kwargs["end_idx"]  # exclusive
         self.status = kwargs["status"]
+        self.mapper_id = -1
 
     def __str__(self):
-        return f"[{self.task_id}:({self.start_idx} {self.end_idx}) {self.status.value}]"
+        return f"[{self.task_id}:({self.start_idx} {self.end_idx}) {self.status.value} {self.mapper_id}]"
 
 
 class Worker:
@@ -234,15 +236,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 return
             # Update in the tasks map and store the results in necessary files
             task.status = TaskStatus.COMPLETED
+            task.mapper_id = worker.worker_id
             worker.status = WorkerStatus.FREE
-            logger.DUMP_LOGGER.error(
-                "Map task SUCCESS. task: %s worker: %s", task, worker
+            logger.DUMP_LOGGER.info(
+                "Map task COMPLETED. task: %s worker: %s", task, worker
             )
 
-    def __run_map(self, iter: int) -> None:
+    def __run_map(self, iteration: int) -> None:
         """run map task"""
         while True:
-            completed = False
+            completed = True
             self.mutex.acquire()
             for i in range(self.n_map):
                 task = self.tasks[i]
@@ -287,11 +290,13 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 completed = completed and (task.status == TaskStatus.COMPLETED)
             self.mutex.release()
             if completed:
-                logger.DUMP_LOGGER.info("ALL MAP tasks are finished for iter: %s", iter)
+                logger.DUMP_LOGGER.info(
+                    "ALL MAP tasks are finished for iter: %s", iteration
+                )
                 break
-            time.sleep(5)
+            time.sleep(SLEEP_TIME)
 
-    def __run_reduce(self, iter: int) -> None:
+    def __run_reduce(self, iteration: int) -> None:
         """run reduce task"""
         pass
 
@@ -301,6 +306,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             logger.DUMP_LOGGER.info("Starting iteration %s MAP", i)
             self.__run_map(iter)
 
+            break
             logger.DUMP_LOGGER.info("Starting iteration %s Reduce", i)
             self.__run_reduce(iter)
 

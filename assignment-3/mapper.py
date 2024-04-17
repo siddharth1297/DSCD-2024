@@ -15,9 +15,12 @@ import logger
 import mapper_pb2
 import mapper_pb2_grpc
 
+import common_messages_pb2
 
-LOGGING_LEVEL = logging.INFO
+LOGGING_LEVEL = logging.DEBUG
 MAX_WORKERS = 2
+
+BASE_DIR = "Data/"
 
 
 class MapTask:
@@ -38,6 +41,9 @@ class MapTask:
 
         self.points = []
         self.points_list_clustered = []
+
+    def __str__(self):
+        return f"[{self.map_id}: ({self.start_idx}-{self.end_idx}) {self.centroids}]"
 
     def read_points_from_file(self) -> None:
         """Stores points in a list of tuples"""
@@ -64,30 +70,29 @@ class MapTask:
 
     def create_mappers_directory(self):
         """Create Mappers directory if not already created"""
+        # Create Mappers directory
         data_directory = "Data"
         mappers_directory = os.path.join(data_directory, "Mappers")
         if not os.path.exists(mappers_directory):
             os.makedirs(mappers_directory)
-            logger.DUMP_LOGGER.info(f"Directory '{mappers_directory}' created.")
+            logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory}' created.")
         else:
-            logger.DUMP_LOGGER.info(f"Directory '{mappers_directory}' already exists.")
+            logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory}' already exists.")
 
-    def create_map_folder_for_partition_files(self):
-        """Create Folder for the current Map Task"""
         folder_name = os.path.join("Data", "Mappers", f"M{self.map_id}")
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
-            logger.DUMP_LOGGER.info(f"Folder '{folder_name}' created.")
+            logger.DUMP_LOGGER.debug(f"Folder '{folder_name}' created.")
         else:
-            logger.DUMP_LOGGER.info(f"Folder '{folder_name}' already exists.")
+            logger.DUMP_LOGGER.debug(f"Folder '{folder_name}' already exists.")
 
     def partition_points(self):
         """Partition the points into R buckets and write to files"""
         partitions = {}
+        for i in range(self.n_reduce):
+            partitions[i] = []
         for key, (point, frequency) in self.points_list_clustered:
             partition_key = key % self.n_reduce
-            if partition_key not in partitions:
-                partitions[partition_key] = []
             partitions[partition_key].append((key, (point, frequency)))
 
         file_namer = 0
@@ -104,21 +109,23 @@ class MapTask:
 
     def do_map_task(self) -> None:
         """Do the map task as per the specificatio"""
+        logger.DUMP_LOGGER.info("Got a map task: %s", str(self))
         self.read_points_from_file()
         self.cluster_points()
         self.create_mappers_directory()
-        self.create_map_folder_for_partition_files()
         self.partition_points()
+        logger.DUMP_LOGGER.info("Map task Done. task: %s.", str(self))
 
     @classmethod
     def from_pb_to_impl_DoMapTaskArgs(cls, request: mapper_pb2.DoMapTaskArgs):
         """Converts DoMapTaskArgs(pb format) to MapTask"""
+        centroids = list(map(lambda x: (x.x, x.y), request.centroids))
         return cls(
             map_id=request.map_id,
             start_idx=request.start_idx,
             end_idx=request.end_idx,
             n_reduce=request.n_reduce,
-            centroids=request.centroids,
+            centroids=centroids,
             filename=request.filename,
         )
 
