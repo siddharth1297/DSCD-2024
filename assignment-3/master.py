@@ -3,6 +3,7 @@ MapReduce Master
 """
 # pylint: disable=too-many-instance-attributes
 from concurrent import futures
+import math
 import threading
 import enum
 import logging
@@ -16,47 +17,100 @@ import master_pb2
 import mapper_pb2_grpc
 import mapper_pb2
 
+import common_messages_pb2
+
 import logger
 
 LOGGING_LEVEL = logging.DEBUG
 
 MAX_WORKERS = 2
-DEFAULT_MAP_TIMEOUT = 30 # second
-DEFAULT_REDUCE_TIMEOUT = 30 # second
+DEFAULT_MAP_TIMEOUT = 30  # second
+DEFAULT_REDUCE_TIMEOUT = 30  # second
 
 
 class TaskStatus(enum.Enum):
     """Task status of a task"""
+
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     FAILED = "FAILED"
     COMPLETED = "COMPLETED"
 
+
+class WorkerStatus(enum.Enum):
+    """Worker status"""
+
+    FREE = "FREE"
+    BUSY = "BUSY"
+    DEAD = "DEAD"
+
+
 class Task:
     """Task structure"""
+
     def __init__(self, **kwargs):
-        self.master = kwargs['master']
-        self.inputfiles = [kwargs['inputfile']]
-        self.start_idx = 0
-        self.end_idx = 0
-        self.status = TaskStatus.PENDING
+        self.task_id = kwargs["task_id"]
+        self.start_idx = kwargs["start_idx"]  # inclusive
+        self.end_idx = kwargs["end_idx"]  # exclusive
+        self.status = kwargs["status"]
+
+    def __str__(self):
+        return f"[{self.task_id}:({self.start_idx} {self.end_idx}) {self.status.value}]"
+
+
+class Worker:
+    """Worker"""
+
+    def __init__(self, **kwargs):
+        self.worker_id = kwargs["worker_id"]
+        self.addr = kwargs["addr"]
+        self.status = kwargs["status"]
+
+    def __str__(self):
+        return f"[{self.worker_id}:{self.addr}-{self.status.value}]"
+
 
 class Master(master_pb2_grpc.MasterServicesServicer):
     """MapReduce Master"""
 
     def __init__(self, **kwargs):
         # MapReduce configurations
-        self.port = kwargs["addr"].split(':')[1]
+        self.port = kwargs["addr"].split(":")[1]
         self.n_map = kwargs["M"]
         self.n_reduce = kwargs["R"]
+
+        self.mappers = list(
+            map(
+                lambda x: Worker(worker_id=x[0], addr=x[1], status=WorkerStatus.FREE),
+                enumerate(kwargs["mappers"]),
+            )
+        )
+        self.reducers = list(
+            map(
+                lambda x: Worker(worker_id=x[0], addr=x[1], status=WorkerStatus.FREE),
+                enumerate(kwargs["reducers"]),
+            )
+        )
+
+        self.tasks = []
 
         # K-means configurations
         self.n_centroids = kwargs["K"]
         self.n_iterations = kwargs["I"]
         self.ip_file = kwargs["inputfile"]
+        self.n_points = 0
+        self.splits = []
+        self.centroids = []
+        self.__init_clustering_params()
 
-        self.mappers = kwargs['mappers']
-        self.reducers = kwargs['reducers']
+        logger.DUMP_LOGGER.info(
+            "NPoints: %s Centroids: [%s]\tSplit_ranges: [%s]",
+            self.n_points,
+            " ".join(map(str, self.centroids)),
+            " ".join(map(lambda x: f"{x[0]}-{x[1]}", self.splits)),
+        )
+
+        self.__create_map_tasks()
 
         # Job states
         self.job_done = False
@@ -65,27 +119,40 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         self.grpc_server = None
         self.mutex = threading.Lock()
         self.executor = futures.ThreadPoolExecutor(max(self.n_map, self.n_reduce))
-    
-    '''Counts no. of points in points.txt'''
-    def count_total_input_points(self, file_path):
-        count = 0
-        with open(file_path, 'r') as file:
-            for line in file:
-                if line.strip():  # Check if the line is not empty after stripping whitespace
-                    count += 1
-        return count
-    
-    '''Stores points in a list of tuples'''
-    def read_points_from_file(self):
+
+    def __create_map_tasks(self) -> None:
+        """Creates map tasks"""
+        for i in range(self.n_map):
+            task = Task(
+                task_id=i,
+                start_idx=self.splits[i][0],
+                end_idx=self.splits[i][1],
+                status=TaskStatus.PENDING,
+            )
+            self.tasks.append(task)
+
+    def __init_clustering_params(self) -> None:
+        """Initialise clustering algorithm params. centroids, split ranges"""
         points = []
-        with open(self.filename, 'r') as file:
+        self.n_points = 0
+        with open(self.ip_file, "r", encoding="UTF-8") as file:
             for line in file:
-                parts = line.strip().split(', ')
+                parts = line.strip().split(",")
                 if len(parts) == 2:
+                    self.n_points += 1
                     x, y = parts
                     points.append((float(x), float(y)))
-        return points
-    
+        split_size = math.ceil(self.n_points / self.n_map)
+        start = 0
+        while start < self.n_points:
+            end = min(start + split_size, self.n_points)
+            self.splits.append([start, end])
+            self.centroids.append(points[int((start + end) / 2)])
+            start += split_size
+
+        assert len(self.splits) == self.n_map
+        assert len(self.centroids) == self.n_map
+
     def start(self) -> None:
         """Start Services"""
         self.__serve()
@@ -93,7 +160,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
     def stop(self) -> bool:
         """Stop"""
         self.grpc_server.stop(1).wait()
-        self.executor.shutdown(wait=True) # cancel_futures=True is for >= Python-3.9
+        self.executor.shutdown(wait=True)  # cancel_futures=True is for >= Python-3.9
         return True
 
     def is_job_done(self) -> bool:
@@ -112,82 +179,117 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         self.grpc_server.start()
         logger.DUMP_LOGGER.info("Service Started at port %s", self.port)
 
-    def SubmitMapJob(self, request: master_pb2.SubmitMapJobArgs, context) -> master_pb2.SubmitMapReply:
+    def SubmitMapJob(
+        self, request: master_pb2.SubmitMapJobArgs, context
+    ) -> master_pb2.SubmitMapReply:
         """SubmitMapJob RPC"""
         logger.DUMP_LOGGER.info("SubmitMapJob RPC from worker %s", request.worker_id)
         return master_pb2.SubmitMapReply()
 
-    def SubmitReduceJob(self, request: master_pb2.SubmitReduceJobArgs, context) -> master_pb2.SubmitReduceReply:
+    def SubmitReduceJob(
+        self, request: master_pb2.SubmitReduceJobArgs, context
+    ) -> master_pb2.SubmitReduceReply:
         """SubmitReduceJob RPC"""
         logger.DUMP_LOGGER.info("SubmitMapJob RPC from worker %s", request.worker_id)
         return master_pb2.SubmitReduceReply()
 
-    def __submit_map_task(self, task: Task, arg: mapper_pb2.DoMapTaskArgs, worker_id: int) -> None:
+    def __submit_map_task(
+        self, task: Task, arg: mapper_pb2.DoMapTaskArgs, worker: Worker
+    ) -> None:
         """Submits mapper task to mapper"""
         reply, error = None, None
         try:
-            with grpc.insecure_channel(self.mappers[worker_id]) as channel:
-                stub = mapper_pb2_grpc.MapperServiceStub(channel)
+            with grpc.insecure_channel(worker.addr) as channel:
+                stub = mapper_pb2_grpc.MapperServicesStub(channel)
                 reply = stub.DoMap(arg, timeout=DEFAULT_MAP_TIMEOUT)
         except grpc.RpcError as err:
-            error = "DOWN"
+            error = (
+                WorkerStatus.DEAD
+            )  # Anything bad happens, consiser the worker as down
             if err.code() == grpc.StatusCode.UNAVAILABLE:
                 logger.DUMP_LOGGER.error(
                     "Error occurred while sending DoMap RPC to Node %s. UNAVAILABLE",
-                    worker_id,
+                    str(worker),
                 )
             elif err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
                 logger.DUMP_LOGGER.error(
                     "Error occurred while sending DoMap RPC to Node %s. DEADLINE_EXCEEDED",
-                    worker_id,
+                    str(worker),
                 )
             else:
                 logger.DUMP_LOGGER.error(
                     "Error occurred while sending DoMap RPC to Node %s. Unknown. Error: %s",
-                    worker_id,
+                    str(worker),
                     str(err),
                 )
         with self.mutex:
             if reply is None:
-                # error must be non-None
+                assert error is not None
                 # Update in the tasks map that this job is failed
                 task.status = TaskStatus.FAILED
+                worker.status = error
+                logger.DUMP_LOGGER.error(
+                    "Map task FAILED. task: %s worker: %s", task, worker
+                )
                 return
             # Update in the tasks map and store the results in necessary files
             task.status = TaskStatus.COMPLETED
+            worker.status = WorkerStatus.FREE
+            logger.DUMP_LOGGER.error(
+                "Map task SUCCESS. task: %s worker: %s", task, worker
+            )
 
     def __run_map(self, iter: int) -> None:
         """run map task"""
-        # TODO: Divide the jobs between the mappers
-        tasks = []
-        myTask=None
-        
-        '''This loop updates ranges for each map task and stores map tasks in a list'''
-        for i in range(len(self.n_map)):
-            '''To Split the data between map jobs'''
-            total_points=self.count_total_input_points('/inputs/point.txt')
-            range_incr= total_points/self.n_map
-            myTask = Task() 
-            myTask.start_idx=i*range_incr
-            myTask.end_idx=i*range_incr + range_incr 
-            tasks.append(myTask)
-        
         while True:
             completed = False
-            for i in range(len(self.n_map)):
-                self.mutex.locked()
+            self.mutex.acquire()
+            for i in range(self.n_map):
+                task = self.tasks[i]
                 if task.status in (TaskStatus.PENDING, TaskStatus.FAILED):
-                    task = tasks[i]
-                    arg = mapper_pb2.DoMapTaskArgs(map_id=i, start_idx=myTask.start_idx, end_idx=myTask.end_idx, n_reduce = self.n_reduce, centroids = self.read_points_from_file[0:self.n_centroids], filename = self.ip_file)
-                    task.status = TaskStatus.RUNNING
-                    self.executor.submit(self.__submit_map_task, task, arg, i)
+                    task = self.tasks[i]
+                    # Find a FREE worker
+                    free_workers = list(
+                        filter(lambda x: x.status == WorkerStatus.FREE, self.mappers)
+                    )
+                    if len(free_workers) == 0:
+                        logger.DUMP_LOGGER.error(
+                            "No worker found for the task %s: %s.", i, str(task)
+                        )
+                    else:
+                        worker = free_workers[0]
+                        arg = mapper_pb2.DoMapTaskArgs(
+                            map_id=i,
+                            start_idx=task.start_idx,
+                            end_idx=task.end_idx,
+                            n_reduce=self.n_reduce,
+                            # centroids=self.centroids,
+                            filename=self.ip_file,
+                        )
+                        centroids_pb2 = list(
+                            map(
+                                lambda x: common_messages_pb2.Point(x=x[0], y=x[1]),
+                                self.centroids,
+                            )
+                        )
+                        arg.centroids.extend(centroids_pb2)
+                        logger.DUMP_LOGGER.info(
+                            "Assigning map task %s: %s to worker %s",
+                            i,
+                            str(task),
+                            str(worker),
+                        )
+
+                        task.status = TaskStatus.RUNNING
+                        worker.status = WorkerStatus.BUSY
+                        self.executor.submit(self.__submit_map_task, task, arg, worker)
+
                 completed = completed and (task.status == TaskStatus.COMPLETED)
-                self.mutex.release()
-                if completed:
-                    break
-                time.sleep(2)
-
-
+            self.mutex.release()
+            if completed:
+                logger.DUMP_LOGGER.info("ALL MAP tasks are finished for iter: %s", iter)
+                break
+            time.sleep(5)
 
     def __run_reduce(self, iter: int) -> None:
         """run reduce task"""
@@ -196,31 +298,26 @@ class Master(master_pb2_grpc.MasterServicesServicer):
     def run(self):
         """run job"""
         for i in range(self.n_iterations):
-            
             logger.DUMP_LOGGER.info("Starting iteration %s MAP", i)
             self.__run_map(iter)
-            
 
-            
             logger.DUMP_LOGGER.info("Starting iteration %s Reduce", i)
             self.__run_reduce(iter)
 
-                # TODO: Check convergence. If it converges, then stop
+            # TODO: Check convergence. If it converges, then stop
         # TODO: Print centroids
         self.stop()
-    
-            
+
 
 if __name__ == "__main__":
     with open("config.yaml", "r", encoding="UTF-8") as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
-        master_cfg = config['master']
-        mappers = config['mappers']
-        reducers = config['reducers']
+        master_cfg = config["master"]
+        mappers = config["mappers"]
+        reducers = config["reducers"]
 
     logger.set_logger("logs/", "master.txt", "master", LOGGING_LEVEL)
     master = Master(**master_cfg, mappers=mappers, reducers=reducers)
-    '''gRPC server started'''
-    master.start() 
-    '''k-means pipeline started'''
+    master.start()
     master.run()
+    master.stop()

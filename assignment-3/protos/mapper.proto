@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "common_messages.proto";
+
 package MapReduce;
 
 service MapperServices {
@@ -12,7 +14,7 @@ message DoMapTaskArgs {
     int32 start_idx = 2;
     int32 end_idx = 3;
     int32 n_reduce = 4;
-    repeated int32 centroids = 5;
+    repeated Point centroids = 5;
     string filename = 6;
 }
 
