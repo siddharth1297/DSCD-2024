@@ -25,12 +25,16 @@ class MapTask:
 
     def __init__(self, map_id, start_idx, end_idx, n_reduce, centroids, filename):
         self.map_id = map_id
+
         self.start_idx = start_idx
         self.end_idx = end_idx
+
         self.n_reduce = n_reduce
+
         self.centroids = centroids
+
         self.filename = filename
-        self.output_file_list_path = []
+        self.output_file_path_list = []
 
         self.points = []
         self.points_list_clustered = []
@@ -60,17 +64,17 @@ class MapTask:
 
     def create_mappers_directory(self):
         """Create Mappers directory if not already created"""
-        # TODO(@Arjun): Concat ids and whatever needed in the end
-        directory = "Mappers"
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-            logger.DUMP_LOGGER.info(f"Directory '{directory}' created.")
+        data_directory = "Data"
+        mappers_directory = os.path.join(data_directory, "Mappers")
+        if not os.path.exists(mappers_directory):
+            os.makedirs(mappers_directory)
+            logger.DUMP_LOGGER.info(f"Directory '{mappers_directory}' created.")
         else:
-            logger.DUMP_LOGGER.info(f"Directory '{directory}' already exists.")
+            logger.DUMP_LOGGER.info(f"Directory '{mappers_directory}' already exists.")
 
-    def create_map_folder(self):
+    def create_map_folder_for_partition_files(self):
         """Create Folder for the current Map Task"""
-        folder_name = f"M{self.map_id}"
+        folder_name = os.path.join("Data", "Mappers", f"M{self.map_id}")
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
             logger.DUMP_LOGGER.info(f"Folder '{folder_name}' created.")
@@ -89,8 +93,10 @@ class MapTask:
         file_namer = 0
 
         for partition_key, partition_points in partitions.items():
-            partition_filename = f"/Mappers/M{self.map_id}/partition_{file_namer}.txt"
-            self.output_file_list_path.append(partition_filename)
+            partition_filename = (
+                f"Data/Mappers/M{self.map_id}/partition_{file_namer}.txt"
+            )
+            self.output_file_path_list.append(partition_filename)
             file_namer += 1
             with open(partition_filename, "w", encoding="UTF-8") as partition_file:
                 for key, ((x, y), frequency) in partition_points:
@@ -101,7 +107,7 @@ class MapTask:
         self.read_points_from_file()
         self.cluster_points()
         self.create_mappers_directory()
-        self.create_map_folder()
+        self.create_map_folder_for_partition_files()
         self.partition_points()
 
     @classmethod
@@ -151,9 +157,20 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         map_task = MapTask.from_pb_to_impl_DoMapTaskArgs(request)
         map_task.do_map_task()
         response = mapper_pb2.DoMapTaskReply(
-            files=map_task.output_file_list_path, worker_id=self.worker_id
+            files=map_task.output_file_path_list, worker_id=self.worker_id
         )
         return response
+
+    def dummy_DoMap(self):
+        m = MapTask(
+            0,
+            0,
+            32,
+            3,
+            [(0.4, 7.2), (0.8, 9.8), (-1.5, 7.3), (8.1, 3.4), (7.3, 2.3)],
+            "./Data/inputs/points.txt",
+        )
+        m.do_map_task()
 
     def GetData(
         self, request: mapper_pb2.GetDataArgs, context
@@ -179,6 +196,9 @@ if __name__ == "__main__":
     )
     mapper = Mapper(worker_id=args.id, worker_port=this_mapper_addr.split(":")[1])
     mapper.start()
+
+    # mapper.dummy_DoMap()
+
     try:
         time.sleep(86400)  # Sleep for 24 hours or until interrupted
     except KeyboardInterrupt:
