@@ -10,17 +10,13 @@ from concurrent import futures
 import grpc
 import yaml
 
-import master_pb2
-import master_pb2_grpc
+import logger
 
 import mapper_pb2
 import mapper_pb2_grpc
 
-import logger
-
 
 LOGGING_LEVEL = logging.INFO
-SLEEP_TIME = 3
 MAX_WORKERS = 2
 
 
@@ -109,7 +105,7 @@ class MapTask:
         self.partition_points()
 
     @classmethod
-    def from_request(cls, request: master_pb2.DoMapTaskArgs):
+    def from_pb_to_impl_DoMapTaskArgs(cls, request: mapper_pb2.DoMapTaskArgs):
         """Converts DoMapTaskArgs(pb format) to MapTask"""
         return cls(
             map_id=request.map_id,
@@ -127,7 +123,6 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
     def __init__(self, **kwargs) -> None:
         self.worker_id = kwargs["worker_id"]
         self.worker_port = kwargs["worker_port"]
-        # self.server_addr = f"0.0.0.0:{kwargs['server_port']}"
         self.grpc_server = None
 
     def __serve(self) -> None:
@@ -139,9 +134,7 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         mapper_pb2_grpc.add_MapperServicesServicer_to_server(self, self.grpc_server)
         self.grpc_server.add_insecure_port("0.0.0.0" + ":" + str(self.worker_port))
         self.grpc_server.start()
-        logger.DUMP_LOGGER.info(
-            "Mapper Worker %s started at port %s", self.worker_id, self.worker_port
-        )
+        logger.DUMP_LOGGER.info("started at port %s", self.worker_port)
 
     def start(self) -> None:
         """Start mapper"""
@@ -152,10 +145,10 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         self.grpc_server.stop(1.5).wait()
 
     def DoMap(
-        self, request: master_pb2.DoMapTaskArgs, context
-    ) -> master_pb2.DoMapTaskReply:
+        self, request: mapper_pb2.DoMapTaskArgs, context
+    ) -> mapper_pb2.DoMapTaskReply:
         """Implement the DoMap RPC method"""
-        map_task = MapTask.from_request(request)
+        map_task = MapTask.from_pb_to_impl_DoMapTaskArgs(request)
         map_task.do_map_task()
         response = mapper_pb2.DoMapTaskReply(
             files=map_task.output_file_list_path, worker_id=self.worker_id
@@ -163,8 +156,8 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         return response
 
     def GetData(
-        self, request: master_pb2.GetDataArgs, context
-    ) -> master_pb2.GetDataReply:
+        self, request: mapper_pb2.GetDataArgs, context
+    ) -> mapper_pb2.GetDataReply:
         """Implement the GetData RPC method"""
         # Your implementation here
         pass
@@ -182,9 +175,9 @@ if __name__ == "__main__":
         mappers = config["mappers"]
         this_mapper_addr = config["mappers"][args.id]
     logger.set_logger(
-        "logs/", f"map_worker_{args.id}.txt", f"worker-{args.id}", LOGGING_LEVEL
+        "logs/", f"mapper_{args.id}.txt", f"mapper-{args.id}", LOGGING_LEVEL
     )
-    mapper = Mapper(worker_id=args.id, worker_port=this_mapper_addr.split[":"][1])
+    mapper = Mapper(worker_id=args.id, worker_port=this_mapper_addr.split(":")[1])
     mapper.start()
     try:
         time.sleep(86400)  # Sleep for 24 hours or until interrupted
