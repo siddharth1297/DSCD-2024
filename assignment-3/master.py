@@ -18,6 +18,8 @@ import mapper_pb2_grpc
 import mapper_pb2
 
 import common_messages_pb2
+import reducer_pb2
+import reducer_pb2_grpc
 
 import logger
 
@@ -30,7 +32,7 @@ SLEEP_TIME = 3
 
 
 class TaskStatus(enum.Enum):
-    """Task status of a task"""
+    """mapTask status of a task"""
 
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -46,8 +48,8 @@ class WorkerStatus(enum.Enum):
     DEAD = "DEAD"
 
 
-class Task:
-    """Task structure"""
+class MapTask:
+    """mapTask structure"""
 
     def __init__(self, **kwargs):
         self.task_id = kwargs["task_id"]
@@ -58,6 +60,18 @@ class Task:
 
     def __str__(self):
         return f"[{self.task_id}:({self.start_idx} {self.end_idx}) {self.status.value} {self.mapper_id}]"
+
+
+class ReduceTask:
+    """reduceTask structure"""
+
+    def __init__(self, **kwargs):
+        self.reduce_id = kwargs["reduce_id"]  #this is partition key 
+        self.status = kwargs["status"]
+        self.mapper_address = []
+
+    def __str__(self):
+        return f"[{self.reduce_id} : {self.status.value} {self.mapper_address}]"
 
 
 class Worker:
@@ -94,7 +108,8 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             )
         )
 
-        self.tasks = []
+        self.map_tasks = []
+        self.reduce_tasks = []
 
         # K-means configurations
         self.n_centroids = kwargs["K"]
@@ -125,13 +140,23 @@ class Master(master_pb2_grpc.MasterServicesServicer):
     def __create_map_tasks(self) -> None:
         """Creates map tasks"""
         for i in range(self.n_map):
-            task = Task(
+            task = MapTask(
                 task_id=i,
                 start_idx=self.splits[i][0],
                 end_idx=self.splits[i][1],
                 status=TaskStatus.PENDING,
             )
-            self.tasks.append(task)
+            self.map_tasks.append(task)
+    
+    def __create_reduce_tasks(self) -> None:
+        """Creates reduce tasks"""
+        for i in range(self.n_reduce):
+            task = ReduceTask(
+                task_id=i,
+                  
+                status=TaskStatus.PENDING,
+            )
+            self.reduce_tasks.append(task)
 
     def __init_clustering_params(self) -> None:
         """Initialise clustering algorithm params. centroids, split ranges"""
@@ -195,8 +220,54 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         logger.DUMP_LOGGER.info("SubmitMapJob RPC from worker %s", request.worker_id)
         return master_pb2.SubmitReduceReply()
 
+    def __submit_reduce_task(
+        self, task: ReduceTask, arg: mapper_pb2.DoReduceTaskArgs, worker: Worker
+    ) -> None:
+        """Submits reducer task to reducer"""
+        reply, error = None, None
+        try:
+            with grpc.insecure_channel(worker.addr) as channel:
+                stub = reducer_pb2_grpc.ReducerServiceStub(channel)
+                reply = stub.DoReduce(arg, timeout=DEFAULT_REDUCE_TIMEOUT)
+        except grpc.RpcError as err:
+            error = (
+                WorkerStatus.DEAD
+            )  # Anything bad happens, consiser the worker as down
+            if err.code() == grpc.StatusCode.UNAVAILABLE:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending DoReduce RPC to Node %s. UNAVAILABLE",
+                    str(worker),
+                )
+            elif err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending DoReduce RPC to Node %s. DEADLINE_EXCEEDED",
+                    str(worker),
+                )
+            else:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending DoReduce RPC to Node %s. Unknown. Error: %s",
+                    str(worker),
+                    str(err),
+                )
+        with self.mutex:
+            if reply is None:
+                assert error is not None
+                # Update in the tasks reduce that this job is failed
+                task.status = TaskStatus.FAILED
+                worker.status = error
+                logger.DUMP_LOGGER.error(
+                    "REDUCE task FAILED. task: %s worker: %s", task, worker
+                )
+                return
+            # Update in the tasks reduce and store the results in necessary files
+            task.status = TaskStatus.COMPLETED
+            worker.status = WorkerStatus.FREE
+            logger.DUMP_LOGGER.info(
+                "REDUCE task COMPLETED. task: %s worker: %s", task, worker
+            )
+
     def __submit_map_task(
-        self, task: Task, arg: mapper_pb2.DoMapTaskArgs, worker: Worker
+        self, task: MapTask, arg: mapper_pb2.DoMapTaskArgs, worker: Worker
     ) -> None:
         """Submits mapper task to mapper"""
         reply, error = None, None
@@ -248,9 +319,9 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             completed = True
             self.mutex.acquire()
             for i in range(self.n_map):
-                task = self.tasks[i]
+                task = self.map_tasks[i]
                 if task.status in (TaskStatus.PENDING, TaskStatus.FAILED):
-                    task = self.tasks[i]
+                    task = self.map_tasks[i]
                     # Find a FREE worker
                     free_workers = list(
                         filter(lambda x: x.status == WorkerStatus.FREE, self.mappers)
@@ -298,17 +369,66 @@ class Master(master_pb2_grpc.MasterServicesServicer):
 
     def __run_reduce(self, iteration: int) -> None:
         """run reduce task"""
-        pass
+        while True:
+            completed = True
+            self.mutex.acquire()
+            for i in range(self.n_reduce):
+                task = self.reduce_tasks[i]
+                if task.status in (TaskStatus.PENDING, TaskStatus.FAILED):
+                    task = self.reduce_tasks[i]
+                    # Find a FREE worker
+                    free_workers = list(
+                        filter(lambda x: x.status == WorkerStatus.FREE, self.reducers)
+                    )
+                    if len(free_workers) == 0:
+                        logger.DUMP_LOGGER.error(
+                            "No worker found for the task %s: %s.", i, str(task)
+                        )
+                    else:
+                        worker = free_workers[0]
+                        arg = reducer_pb2.DoReduceTaskArgs(
+                            reduce_id = task.reduce_id
+                        )
+                        arg.mapper_address.extend(task.mapper_address)
+                        logger.DUMP_LOGGER.info(
+                            "Assigning reduce task %s: %s to worker %s",
+                            i,
+                            str(task),
+                            str(worker),
+                        )
+                        task.status = TaskStatus.RUNNING
+                        worker.status = WorkerStatus.BUSY
+                        self.executor.submit(self.__submit_reduce_task, task, arg, worker)
+
+                completed = completed and (task.status == TaskStatus.COMPLETED)
+            self.mutex.release()
+            if completed:
+                logger.DUMP_LOGGER.info(
+                    "ALL REDUCE tasks are finished for iter: %s", iteration
+                )
+                break
+            time.sleep(SLEEP_TIME)
+
 
     def run(self):
         """run job"""
         for i in range(self.n_iterations):
             logger.DUMP_LOGGER.info("Starting iteration %s MAP", i)
-            self.__run_map(iter)
+            self.__run_map(i)
 
-            break
+            self.mutex.acquire()
+            self.reduce_tasks = [ReduceTask(reduce_id=i, status=TaskStatus.PENDING) for i in range(self.n_reduce)]
+            for task in self.reduce_tasks:
+                task.mapper_address = list(map(lambda x: self.mappers[x.mapper_id].addr, self.map_tasks))
+            logger.DUMP_LOGGER.info("Reduce Tasks: [%s]", ']['.join(map(str, self.reduce_tasks)))
+
+            # Clean the last map task
+            for task in self.map_tasks:
+                task.status = TaskStatus.PENDING
+            self.mutex.release()
+
             logger.DUMP_LOGGER.info("Starting iteration %s Reduce", i)
-            self.__run_reduce(iter)
+            self.__run_reduce(i)
 
             # TODO: Check convergence. If it converges, then stop
         # TODO: Print centroids

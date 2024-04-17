@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "common_messages.proto";
+
 package MapReduce;
 
 service ReducerService {
@@ -7,16 +9,21 @@ service ReducerService {
 }
 
 message DoReduceTaskArgs {
-    int32 query = 1;
-    repeated string partition_files_path = 2;
-    string output_location = 3;
+    int32 reduce_id = 1; 
+    repeated string mapper_address = 2;
+}
+
+enum Status {
+    FAILED = 0;
+    SUCCESS = 1;
+}
+
+message Centroid {
+    int32 index = 1;
+    Point centroid = 2;
 }
 
 message DoReduceTaskReply {
-    enum Status {
-        FAILED = 0;
-        SUCCESS = 1;
-    }
     Status status = 1;
-    string output_file_path = 2;
+    repeated Centroid updated_centroids = 2;
 }
