@@ -7,6 +7,7 @@ import argparse
 import logging
 import time
 from concurrent import futures
+import typing
 import grpc
 import yaml
 
@@ -23,22 +24,22 @@ MAX_WORKERS = 2
 BASE_DIR = "Data/"
 
 
-class ReduceTaskHandler: 
-    def __init__(self, reduce_id, mapper_address):
-        self.reduce_id = reduce_id
-        self.mapper_address = mapper_address
-        self.data_list = []
+class ReduceTaskHandler:
+    """Reduce Task"""
+
+    def __init__(self, reduce_id: int, map_id: int):
+        self.reduce_key = reduce_id
+        self.map_id = map_id
+        self.partition_file = f"M{self.map_id}/partition_{self.reduce_key}.txt"
+        return cls(reduce_id = request.parition_key, map_id = request.map_id)
 
     def __str__(self):
-        return f"[{self.reduce_id}: {self.files_list}]"
-    
+        return f"[{self.reduce_key}: {self.map_id} {self.partition_file}]"
+
+    @classmethod
     def from_pb_to_impl_GetDataArgs(cls, request: mapper_pb2.GetDataArgs):
-        """Converts DoMapTaskArgs(pb format) to MapTask"""
-        # centroids = list(map(lambda x: (x.x, x.y), request.centroids))
-        return cls(
-            reduce_id = request.reduce_id, 
-            mapper_address = request.mapper_address 
-        )
+        """Converts DoMapTaskArgs(pb format) to ReduceTask"""
+        return cls(reduce_id = request.parition_key, map_id = request.map_id)
 
 class MapTask:
     """MapTask structure"""
@@ -198,12 +199,30 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         )
         m.do_map_task()
 
+    def __get_data(self, reduce_key: int, map_id: int) -> typing.List[typing.Tuple[int, typing.Tuple[float, int]]]:
+        """Get the data from fs"""
+        partition_file = f"M{map_id}/partition_{reduce_key}.txt"
+        data = []
+        with open(partition_file, "r", encoding="UTF-8") as file:
+            for line in file:
+                if line == "":
+                    continue
+                comma_separated = line.replace('(', '').replace(')', '')
+                values = comma_separated.split(',')
+                if len(values) != 4:
+                    print("Error while parssing file. Line: ", line)
+                item = (int(values[0]), ((float(values[1]), float(values[2])), int(values[3])))
+                data.append(item)
+        print(data)
+        exit(1)
+        return data
+
     def GetData(
         self, request: mapper_pb2.GetDataArgs, context
     ) -> mapper_pb2.GetDataReply:
         """Implement the GetData RPC method"""
-        reduceTask = MapTask.from_pb_to_impl_GetDataTaskArgs()
-        pass
+        data = self.__get_data(request.parition_key, request.map_id)
+        
 
 
 if __name__ == "__main__":

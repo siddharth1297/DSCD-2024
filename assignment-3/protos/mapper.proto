@@ -24,10 +24,8 @@ message DoMapTaskReply {
 }
 
 message GetDataArgs {
-    int32 red_id=1;
-    repeated string mapper_address = 2;  
-
-
+    int32 parition_key = 1;
+    int32 map_id = 2;
 }
 
 message GetDataReply {

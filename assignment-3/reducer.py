@@ -7,6 +7,7 @@ import argparse
 import logging
 import time
 from concurrent import futures
+import typing
 import grpc
 import yaml
 
@@ -15,13 +16,16 @@ import logger
 import reducer_pb2
 import reducer_pb2_grpc
 
+import mapper_pb2
+import mapper_pb2_grpc
+
 import common_messages_pb2
 
 LOGGING_LEVEL = logging.DEBUG
 MAX_WORKERS = 2
 
 BASE_DIR = "Data/"
-
+DEFAULT_MAP_GETDATA_TIMEOUT = 30
 
 class ReduceTask:
     """ReduceTask structure"""
@@ -29,7 +33,7 @@ class ReduceTask:
     def __init__(self, reduce_id, mapper_address):
         self.reduce_id = reduce_id
         self.mapper_address = mapper_address
-         
+        self.map_data = []
 
     def __str__(self):
         return f"[{self.reduce_id}:{self.mapper_address}]"
@@ -98,18 +102,58 @@ class ReduceTask:
                 for key, ((x, y), frequency) in partition_points:
                     partition_file.write(f"({key},(({x},{y}), 1))\n")
 
+    def __get_data_from_mapper(self, arg: mapper_pb2.GetDataArgs, addr: str) -> typing.List[typing.Tuple[int, typing.Tuple[float, int]]]:
+        """Get data from the mappers by calling the GetData RPC"""
+        reply = None
+        try:
+            with grpc.insecure_channel(addr) as channel:
+                stub = mapper_pb2_grpc.MapperServicesStub(channel)
+                reply = stub.GetData(arg, timeout=DEFAULT_MAP_GETDATA_TIMEOUT)
+        except grpc.RpcError as err:
+            if err.code() == grpc.StatusCode.UNAVAILABLE:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending GetData RPC to Node %s. UNAVAILABLE",
+                    str(addr),
+                )
+            elif err.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending GetData RPC to Node %s. DEADLINE_EXCEEDED",
+                    str(addr),
+                )
+            else:
+                logger.DUMP_LOGGER.error(
+                    "Error occurred while sending GetData RPC to Node %s. Unknown. Error: %s",
+                    str(addr),
+                    str(err),
+                )
+
+        if reply is None:
+            logger.DUMP_LOGGER.error("Mapper not rechable to get data. Exiting")
+            print("Mapper not rechable to get data. Exiting")
+            exit(1)
+
+        print("DONE")
+        exit(1)
+
     def do_reduce_task(self) -> None:
         """Do the reduce task as per the specificatio"""
         logger.DUMP_LOGGER.info("Got a reduce task: %s", str(self))
-        
+        # Get data from mapper
+        for i in range(self.mapper_address):
+            arg = mapper_pb2.GetDataArgs(parition_key=self.reduce_id, map_id=i)
+            mapper_data = self.__get_data_from_mapper(arg, self.mapper_address[i])
+            self.map_data.append(mapper_data)
         logger.DUMP_LOGGER.info("Reduce task Done. task: %s.", str(self))
 
     @classmethod
     def from_pb_to_impl_DoReduceTaskArgs(cls, request: reducer_pb2.DoReduceTaskArgs):
         """Converts DoReduceTaskArgs(pb format) to ReduceTask"""
+        print(request.mapper_address)
+        print(type(request.mapper_address))
+        print(request.mapper_address)
         return cls(
             reduce_id = request.reduce_id,
-            mapper_address = request.mapper_address, 
+            #mapper_address = request.mapper_address, 
         )
 
 
@@ -146,9 +190,7 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
         """Implement the DoReduce RPC"""
         reduce_task = ReduceTask.from_pb_to_impl_DoReduceTaskArgs(request)
         reduce_task.do_reduce_task()
-        return reducer_pb2.DoReduceTaskReply(
-            #TO DO
-        )
+        return reducer_pb2.DoReduceTaskReply()
 
 
 if __name__ == "__main__":

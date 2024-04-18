@@ -284,9 +284,6 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             with grpc.insecure_channel(worker.addr) as channel:
                 stub = mapper_pb2_grpc.MapperServicesStub(channel)
                 reply = stub.DoMap(arg, timeout=DEFAULT_MAP_TIMEOUT)
-                
-                self.mapper_file_output[task.task_id] = [reply.worker_id] + reply.files #creates a dictionary of form { <map-task-id> :  [worker-id, file_path1, file_path2]}
-
         except grpc.RpcError as err:
             error = (
                 WorkerStatus.DEAD
@@ -402,10 +399,8 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                         worker = free_workers[0]
                         arg = reducer_pb2.DoReduceTaskArgs(
                             reduce_id = task.reduce_id
-
-
                         )
-
+                        arg.mapper_address.extend(task.mapper_address)
                         # # Iterate over your mapper_file_output list
                         # for files in self.mapper_file_output:
                         #     entry = reducer_pb2_grpc.Entry()
