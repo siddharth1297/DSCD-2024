@@ -23,6 +23,23 @@ MAX_WORKERS = 2
 BASE_DIR = "Data/"
 
 
+class ReduceTaskHandler: 
+    def __init__(self, reduce_id, mapper_address):
+        self.reduce_id = reduce_id
+        self.mapper_address = mapper_address
+        self.data_list = []
+
+    def __str__(self):
+        return f"[{self.reduce_id}: {self.files_list}]"
+    
+    def from_pb_to_impl_GetDataArgs(cls, request: mapper_pb2.GetDataArgs):
+        """Converts DoMapTaskArgs(pb format) to MapTask"""
+        # centroids = list(map(lambda x: (x.x, x.y), request.centroids))
+        return cls(
+            reduce_id = request.reduce_id, 
+            mapper_address = request.mapper_address 
+        )
+
 class MapTask:
     """MapTask structure"""
 
@@ -137,6 +154,7 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         self.worker_id = kwargs["worker_id"]
         self.worker_port = kwargs["worker_port"]
         self.grpc_server = None
+        self.reduce_task_handler = []
 
     def __serve(self) -> None:
         """Start services"""
@@ -167,7 +185,8 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
             files=map_task.output_file_path_list, worker_id=self.worker_id
         )
         return response
-
+    
+    
     def dummy_DoMap(self):
         m = MapTask(
             0,
@@ -183,7 +202,7 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         self, request: mapper_pb2.GetDataArgs, context
     ) -> mapper_pb2.GetDataReply:
         """Implement the GetData RPC method"""
-        # Your implementation here
+        reduceTask = MapTask.from_pb_to_impl_GetDataTaskArgs()
         pass
 
 

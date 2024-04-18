@@ -10,8 +10,12 @@ service ReducerService {
 
 message DoReduceTaskArgs {
     int32 reduce_id = 1; 
+    
     repeated string mapper_address = 2;
 }
+
+
+
 
 enum Status {
     FAILED = 0;

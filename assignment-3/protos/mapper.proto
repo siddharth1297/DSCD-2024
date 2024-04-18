@@ -24,11 +24,28 @@ message DoMapTaskReply {
 }
 
 message GetDataArgs {
-    int32 red_id=1; 
+    int32 red_id=1;
+    repeated string mapper_address = 2;  
 
 
 }
 
 message GetDataReply {
     string filename =1 ; 
+}
+
+
+
+message DataEntry {
+    int32 key = 1;
+    Point point = 2;
+    int32 value = 3;
+}
+
+message PerMapperJobData {
+    repeated DataEntry entries = 1;
+}
+
+message Data {
+    repeated PerMapperJobData all_entries = 1; 
 }

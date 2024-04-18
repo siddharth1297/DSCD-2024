@@ -111,6 +111,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         self.map_tasks = []
         self.reduce_tasks = []
 
+        self.mapper_file_output = {}    
         # K-means configurations
         self.n_centroids = kwargs["K"]
         self.n_iterations = kwargs["I"]
@@ -126,7 +127,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             " ".join(map(str, self.centroids)),
             " ".join(map(lambda x: f"{x[0]}-{x[1]}", self.splits)),
         )
-
+         
         self.__create_map_tasks()
 
         # Job states
@@ -171,14 +172,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                     points.append((float(x), float(y)))
         split_size = math.ceil(self.n_points / self.n_map)
         start = 0
+        self.centroids =  (points[0:self.n_centroids])
         while start < self.n_points:
             end = min(start + split_size, self.n_points)
             self.splits.append([start, end])
-            self.centroids.append(points[int((start + end) / 2)])
+            # self.centroids.append(points[int((start + end) / 2)])
+            # self.centroids.append(points[0:self.n_centroids])
             start += split_size
 
         assert len(self.splits) == self.n_map
-        assert len(self.centroids) == self.n_map
+        assert len(self.centroids) == self.n_centroids
 
     def start(self) -> None:
         """Start Services"""
@@ -221,7 +224,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         return master_pb2.SubmitReduceReply()
 
     def __submit_reduce_task(
-        self, task: ReduceTask, arg: mapper_pb2.DoReduceTaskArgs, worker: Worker
+        self, task: ReduceTask, arg: reducer_pb2.DoReduceTaskArgs, worker: Worker
     ) -> None:
         """Submits reducer task to reducer"""
         reply, error = None, None
@@ -229,10 +232,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             with grpc.insecure_channel(worker.addr) as channel:
                 stub = reducer_pb2_grpc.ReducerServiceStub(channel)
                 reply = stub.DoReduce(arg, timeout=DEFAULT_REDUCE_TIMEOUT)
+                new_centroids=[]
+                for centroid in reply.updated_centroids:
+                    new_centroids.append((centroid.centroid.x, centroid.centroid.y))
+                
+                self.centroids=new_centroids+self.centroids #prepend the new centroid values to the original centroid values
+
         except grpc.RpcError as err:
             error = (
                 WorkerStatus.DEAD
-            )  # Anything bad happens, consiser the worker as down
+            )  # Anything bad happens, consider the worker as down
             if err.code() == grpc.StatusCode.UNAVAILABLE:
                 logger.DUMP_LOGGER.error(
                     "Error occurred while sending DoReduce RPC to Node %s. UNAVAILABLE",
@@ -275,6 +284,9 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             with grpc.insecure_channel(worker.addr) as channel:
                 stub = mapper_pb2_grpc.MapperServicesStub(channel)
                 reply = stub.DoMap(arg, timeout=DEFAULT_MAP_TIMEOUT)
+                
+                self.mapper_file_output[task.task_id] = [reply.worker_id] + reply.files #creates a dictionary of form { <map-task-id> :  [worker-id, file_path1, file_path2]}
+
         except grpc.RpcError as err:
             error = (
                 WorkerStatus.DEAD
@@ -346,7 +358,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                                 self.centroids,
                             )
                         )
-                        arg.centroids.extend(centroids_pb2)
+                        arg.centroids.extend(centroids_pb2[:self.n_centroids])
                         logger.DUMP_LOGGER.info(
                             "Assigning map task %s: %s to worker %s",
                             i,
@@ -357,6 +369,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                         task.status = TaskStatus.RUNNING
                         worker.status = WorkerStatus.BUSY
                         self.executor.submit(self.__submit_map_task, task, arg, worker)
+                        
 
                 completed = completed and (task.status == TaskStatus.COMPLETED)
             self.mutex.release()
@@ -366,6 +379,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 )
                 break
             time.sleep(SLEEP_TIME)
+            
 
     def __run_reduce(self, iteration: int) -> None:
         """run reduce task"""
@@ -388,7 +402,17 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                         worker = free_workers[0]
                         arg = reducer_pb2.DoReduceTaskArgs(
                             reduce_id = task.reduce_id
+
+
                         )
+
+                        # # Iterate over your mapper_file_output list
+                        # for files in self.mapper_file_output:
+                        #     entry = reducer_pb2_grpc.Entry()
+                        #     entry.files.extend(files)  # Assuming files is a list of strings
+                        #     arg.file_path_data[len(arg.file_path_data) + 1].CopyFrom(entry)
+                        
+                        # arg.files.extend(self.mapper_file_output)
                         arg.mapper_address.extend(task.mapper_address)
                         logger.DUMP_LOGGER.info(
                             "Assigning reduce task %s: %s to worker %s",
@@ -415,11 +439,13 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         for i in range(self.n_iterations):
             logger.DUMP_LOGGER.info("Starting iteration %s MAP", i)
             self.__run_map(i)
-
+           
             self.mutex.acquire()
             self.reduce_tasks = [ReduceTask(reduce_id=i, status=TaskStatus.PENDING) for i in range(self.n_reduce)]
             for task in self.reduce_tasks:
-                task.mapper_address = list(map(lambda x: self.mappers[x.mapper_id].addr, self.map_tasks))
+                task.mapper_address = list(map(lambda x: self.mappers[x.mapper_id].addr, self.map_tasks)) # task.mapper_address [map_id] = host_ip:port
+                # print(task.mapper_address) 
+            
             logger.DUMP_LOGGER.info("Reduce Tasks: [%s]", ']['.join(map(str, self.reduce_tasks)))
 
             # Clean the last map task

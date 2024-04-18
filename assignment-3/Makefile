@@ -13,7 +13,7 @@ clean-protoc:
 	rm -f $(PROTO_OUT)*_pb2.py $(PROTO_OUT)*_pb2_grpc.py
 
 clean-logs:
-	rm -rf logs_node_*
+	rm -rf logs
 
 format:
 	black $(SRC)

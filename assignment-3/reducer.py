@@ -26,24 +26,13 @@ BASE_DIR = "Data/"
 class ReduceTask:
     """ReduceTask structure"""
 
-    def __init__(self, map_id, start_idx, end_idx, n_reduce, centroids, filename):
-        self.map_id = map_id
-
-        self.start_idx = start_idx
-        self.end_idx = end_idx
-
-        self.n_reduce = n_reduce
-
-        self.centroids = centroids
-
-        self.filename = filename
-        self.output_file_path_list = []
-
-        self.points = []
-        self.points_list_clustered = []
+    def __init__(self, reduce_id, mapper_address):
+        self.reduce_id = reduce_id
+        self.mapper_address = mapper_address
+         
 
     def __str__(self):
-        return f"[{self.map_id}: ({self.start_idx}-{self.end_idx}) {self.centroids}]"
+        return f"[{self.reduce_id}:{self.mapper_address}]"
 
     def read_points_from_file(self) -> None:
         """Stores points in a list of tuples"""
@@ -110,20 +99,18 @@ class ReduceTask:
                     partition_file.write(f"({key},(({x},{y}), 1))\n")
 
     def do_reduce_task(self) -> None:
-        """Do the map task as per the specificatio"""
+        """Do the reduce task as per the specificatio"""
         logger.DUMP_LOGGER.info("Got a reduce task: %s", str(self))
-        """
-        self.read_points_from_file()
-        self.cluster_points()
-        self.create_reducers_directory()
-        self.partition_points()
-        """
+        
         logger.DUMP_LOGGER.info("Reduce task Done. task: %s.", str(self))
 
     @classmethod
     def from_pb_to_impl_DoReduceTaskArgs(cls, request: reducer_pb2.DoReduceTaskArgs):
         """Converts DoReduceTaskArgs(pb format) to ReduceTask"""
-        return cls()
+        return cls(
+            reduce_id = request.reduce_id,
+            mapper_address = request.mapper_address, 
+        )
 
 
 class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
@@ -159,13 +146,15 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
         """Implement the DoReduce RPC"""
         reduce_task = ReduceTask.from_pb_to_impl_DoReduceTaskArgs(request)
         reduce_task.do_reduce_task()
-        return reducer_pb2.DoReduceTaskReply()
+        return reducer_pb2.DoReduceTaskReply(
+            #TO DO
+        )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="MapReduce Reducer",
-        epilog="$ python3 reduer.py -I 0",
+        epilog="$ python3 reducer.py -I 0",
     )
     parser.add_argument("-I", "--id", help="Worker ID", required=True, type=int)
     args = parser.parse_args()
