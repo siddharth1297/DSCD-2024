@@ -129,31 +129,34 @@ class ReduceTask:
 
         if reply is None:
             logger.DUMP_LOGGER.error("Mapper not rechable to get data. Exiting")
-            print("Mapper not rechable to get data. Exiting")
+            # print("Mapper not rechable to get data. Exiting")
             exit(1)
-
-        print("DONE")
-        exit(1)
+        data = list(map(lambda x: (x.key, ((x.point.x, x.point.y), x.value)), reply.entries))
+        print(data)
 
     def do_reduce_task(self) -> None:
         """Do the reduce task as per the specificatio"""
         logger.DUMP_LOGGER.info("Got a reduce task: %s", str(self))
         # Get data from mapper
-        for i in range(self.mapper_address):
-            arg = mapper_pb2.GetDataArgs(parition_key=self.reduce_id, map_id=i)
+        for i in range(len(self.mapper_address)):
+            # logger.DUMP_LOGGER.info("Prepare")
+            arg = mapper_pb2.GetDataArgs(partition_key=self.reduce_id, map_id=i) #serialize request to mapper 
+            # logger.DUMP_LOGGER.info(arg)
             mapper_data = self.__get_data_from_mapper(arg, self.mapper_address[i])
-            self.map_data.append(mapper_data)
+            self.map_data = self.map_data + mapper_data
+            
+        # print(self.map_data)    
         logger.DUMP_LOGGER.info("Reduce task Done. task: %s.", str(self))
 
     @classmethod
     def from_pb_to_impl_DoReduceTaskArgs(cls, request: reducer_pb2.DoReduceTaskArgs):
         """Converts DoReduceTaskArgs(pb format) to ReduceTask"""
-        print(request.mapper_address)
-        print(type(request.mapper_address))
-        print(request.mapper_address)
+        # print(request.mapper_address)
+        # print(type(request.mapper_address))
+        # print(request.mapper_address)
         return cls(
             reduce_id = request.reduce_id,
-            #mapper_address = request.mapper_address, 
+            mapper_address = [str(addr) for addr in request.mapper_address]
         )
 
 
@@ -189,6 +192,7 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
     ) -> reducer_pb2.DoReduceTaskReply:
         """Implement the DoReduce RPC"""
         reduce_task = ReduceTask.from_pb_to_impl_DoReduceTaskArgs(request)
+        # logger.DUMP_LOGGER.debug("New Reduce Task created %s", type(reduce_task.mapper_address))
         reduce_task.do_reduce_task()
         return reducer_pb2.DoReduceTaskReply()
 

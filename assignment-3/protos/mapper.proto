@@ -24,26 +24,16 @@ message DoMapTaskReply {
 }
 
 message GetDataArgs {
-    int32 parition_key = 1;
+    int32 partition_key = 1;
     int32 map_id = 2;
 }
 
 message GetDataReply {
-    string filename =1 ; 
+    repeated DataEntry entries = 1;
 }
-
-
 
 message DataEntry {
     int32 key = 1;
     Point point = 2;
     int32 value = 3;
-}
-
-message PerMapperJobData {
-    repeated DataEntry entries = 1;
-}
-
-message Data {
-    repeated PerMapperJobData all_entries = 1; 
 }

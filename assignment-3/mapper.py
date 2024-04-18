@@ -199,9 +199,9 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         )
         m.do_map_task()
 
-    def __get_data(self, reduce_key: int, map_id: int) -> typing.List[typing.Tuple[int, typing.Tuple[float, int]]]:
+    def __get_data(self, reduce_key: int, map_id: int):
         """Get the data from fs"""
-        partition_file = f"M{map_id}/partition_{reduce_key}.txt"
+        partition_file = f"Data/Mappers/M{map_id}/partition_{reduce_key}.txt"
         data = []
         with open(partition_file, "r", encoding="UTF-8") as file:
             for line in file:
@@ -211,17 +211,29 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
                 values = comma_separated.split(',')
                 if len(values) != 4:
                     print("Error while parssing file. Line: ", line)
-                item = (int(values[0]), ((float(values[1]), float(values[2])), int(values[3])))
+                item = [int(values[0]), float(values[1]), float(values[2]), int(values[3])]
+                #item = (int(values[0]), ((float(values[1]), float(values[2])), int(values[3])))
                 data.append(item)
-        print(data)
-        exit(1)
+        #print(data)
+        #exit(1)
         return data
 
     def GetData(
         self, request: mapper_pb2.GetDataArgs, context
     ) -> mapper_pb2.GetDataReply:
         """Implement the GetData RPC method"""
-        data = self.__get_data(request.parition_key, request.map_id)
+        logger.DUMP_LOGGER.info("GetData invoked for key %s map_id %s", request.partition_key, request.map_id)
+        data = self.__get_data(request.partition_key, request.map_id)
+        data_pb2 = list(map(lambda x: mapper_pb2.DataEntry(key=x[0],
+                                                        point = common_messages_pb2.Point(x=x[1], y=x[2]),
+                                                        value=x[3]), data))
+        
+        response = mapper_pb2.GetDataReply()
+        response.entries.extend(data_pb2)
+        logger.DUMP_LOGGER.info("GetData Exited")
+        return response
+
+
         
 
 

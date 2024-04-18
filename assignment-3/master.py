@@ -232,12 +232,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             with grpc.insecure_channel(worker.addr) as channel:
                 stub = reducer_pb2_grpc.ReducerServiceStub(channel)
                 reply = stub.DoReduce(arg, timeout=DEFAULT_REDUCE_TIMEOUT)
-                new_centroids=[]
-                for centroid in reply.updated_centroids:
-                    new_centroids.append((centroid.centroid.x, centroid.centroid.y))
                 
-                self.centroids=new_centroids+self.centroids #prepend the new centroid values to the original centroid values
-
         except grpc.RpcError as err:
             error = (
                 WorkerStatus.DEAD
@@ -258,6 +253,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                     str(worker),
                     str(err),
                 )
+        
         with self.mutex:
             if reply is None:
                 assert error is not None
@@ -268,6 +264,13 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                     "REDUCE task FAILED. task: %s worker: %s", task, worker
                 )
                 return
+            
+            new_centroids=[]
+            for centroid in reply.updated_centroids:
+                    new_centroids.append((centroid.centroid.x, centroid.centroid.y))
+                
+            self.centroids=new_centroids+self.centroids #prepend the new centroid values to the original centroid values
+            
             # Update in the tasks reduce and store the results in necessary files
             task.status = TaskStatus.COMPLETED
             worker.status = WorkerStatus.FREE
@@ -401,14 +404,9 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                             reduce_id = task.reduce_id
                         )
                         arg.mapper_address.extend(task.mapper_address)
-                        # # Iterate over your mapper_file_output list
-                        # for files in self.mapper_file_output:
-                        #     entry = reducer_pb2_grpc.Entry()
-                        #     entry.files.extend(files)  # Assuming files is a list of strings
-                        #     arg.file_path_data[len(arg.file_path_data) + 1].CopyFrom(entry)
                         
-                        # arg.files.extend(self.mapper_file_output)
-                        arg.mapper_address.extend(task.mapper_address)
+                        # arg.mapper_address.
+                        
                         logger.DUMP_LOGGER.info(
                             "Assigning reduce task %s: %s to worker %s",
                             i,
@@ -439,7 +437,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             self.reduce_tasks = [ReduceTask(reduce_id=i, status=TaskStatus.PENDING) for i in range(self.n_reduce)]
             for task in self.reduce_tasks:
                 task.mapper_address = list(map(lambda x: self.mappers[x.mapper_id].addr, self.map_tasks)) # task.mapper_address [map_id] = host_ip:port
-                # print(task.mapper_address) 
+                # logger.DUMP_LOGGER.info("Mapper Addrs: %s", task.mapper_address)
             
             logger.DUMP_LOGGER.info("Reduce Tasks: [%s]", ']['.join(map(str, self.reduce_tasks)))
 
