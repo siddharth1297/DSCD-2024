@@ -173,7 +173,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         split_size = math.ceil(self.n_points / self.n_map)
         start = 0
         self.centroids = points[0 : self.n_centroids]
-        self.centroids = [round(i, 4) for i in self.centroids]
+        self.centroids = [(round(i[0], 4), round(i[1], 4)) for i in self.centroids]
         while start < self.n_points:
             end = min(start + split_size, self.n_points)
             self.splits.append([start, end])
@@ -434,6 +434,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 break
             time.sleep(SLEEP_TIME)
 
+    def check_convergence(self):
+        new_list = self.centroids[0:self.n_centroids]
+        old_list = self.centroids[self.n_centroids: 2*self.n_centroids]
+
+        for i in range(self.n_centroids):
+            if(new_list[0] == old_list [0] and new_list [1] == old_list [1]):
+                return True
+
+        return False 
+        
     def run(self):
         """run job"""
         for i in range(self.n_iterations):
@@ -463,11 +473,14 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             logger.DUMP_LOGGER.info("Starting iteration %s Reduce", i)
             self.__run_reduce(i)
 
-            # TODO: Check convergence. If it converges, then stop
-
+            if(i>0 and self.check_convergence()):
+                logger.DUMP_LOGGER.info("centroid convergence acheived")
+                break 
+                
+              
         with open('Data/centroid.txt', "w", encoding="UTF-8") as file:
             # file.write(str(self.centroids[0:self.n_centroids]))
-            file.write(str(self.centroids))
+            file.write(str(self.centroids[0:self.n_centroids]))
         self.stop()
 
 

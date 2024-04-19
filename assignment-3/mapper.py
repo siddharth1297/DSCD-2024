@@ -86,23 +86,49 @@ class MapTask:
                     closest_centroid_index = idx
             self.points_list_clustered.append((closest_centroid_index, (point, 1)))
 
+    # def create_mappers_directory(self):
+    #     """Create Mappers directory if not already created"""
+    #     # Create Mappers directory
+    #     data_directory = "Data"
+    #     mappers_directory = os.path.join(data_directory, "Mappers")
+    #     try:
+    #         # Try to create Reducers directory
+    #         os.makedirs(mappers_directory )
+    #         logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory }' created.")
+    #     except FileExistsError:
+    #         # Directory already exists
+    #         logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory }' already exists.")
+    #     except Exception as e:
+    #         # Handle other exceptions
+    #         logger.DUMP_LOGGER.error(f"Error creating directory '{mappers_directory }': {e}")
+
+
+    #     folder_name = os.path.join("Data", "Mappers", f"M{self.map_id}")
+    #     try:
+    #         # Try to create Reducers directory
+    #         os.makedirs(folder_name)
+    #         logger.DUMP_LOGGER.debug(f"Directory '{folder_name }' created.")
+    #     except FileExistsError:
+    #         # Directory already exists
+    #         logger.DUMP_LOGGER.debug(f"Directory '{folder_name }' already exists.")
+    #     except Exception as e:
+    #         # Handle other exceptions
+    #         logger.DUMP_LOGGER.error(f"Error creating directory '{folder_name }': {e}")
+
     def create_mappers_directory(self):
         """Create Mappers directory if not already created"""
         # Create Mappers directory
-        data_directory = "Data"
-        mappers_directory = os.path.join(data_directory, "Mappers")
-        if not os.path.exists(mappers_directory):
-            os.makedirs(mappers_directory)
-            logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory}' created.")
-        else:
-            logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory}' already exists.")
-
-        folder_name = os.path.join("Data", "Mappers", f"M{self.map_id}")
-        if not os.path.exists(folder_name):
-            os.makedirs(folder_name)
-            logger.DUMP_LOGGER.debug(f"Folder '{folder_name}' created.")
-        else:
-            logger.DUMP_LOGGER.debug(f"Folder '{folder_name}' already exists.")
+        data_directory = "Data/Mappers"
+        try:
+            os.makedirs(data_directory)
+        except FileExistsError:
+            pass
+        
+        mapper_dir = data_directory + "/" + f"M{self.map_id}"
+        try:
+            os.makedirs(mapper_dir)
+        except FileExistsError:
+            pass      
 
     def partition_points(self):
         """Partition the points into R buckets and write to files"""

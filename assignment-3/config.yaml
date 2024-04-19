@@ -2,10 +2,10 @@
 master:
   addr: 127.0.0.1:8085
   M: 2  # #mappers
-  R: 1  # #reducers
+  R: 2  # #reducers
   K: 2  # #centroids
-  I: 2  # #iterations
-  inputfile: Data/points.txt
+  I: 4  # #iterations
+  inputfile: Data/points_test.txt
 
 mappers:
     - 127.0.0.1:8070
