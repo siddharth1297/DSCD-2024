@@ -269,7 +269,6 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 return
 
             if reply.status == reducer_pb2.Status.FAILED:
-                logger.DUMP_LOGGER.info("MATCHEDDDDDD")
                 task.status = TaskStatus.FAILED
                 worker.status = WorkerStatus.FREE
                 logger.DUMP_LOGGER.error(
