@@ -4,8 +4,8 @@ master:
   M: 2  # #mappers
   R: 2  # #reducers
   K: 2  # #centroids
-  I: 4  # #iterations
-  inputfile: Data/points_test.txt
+  I: 8  # #iterations
+  inputfile: Data/points.txt
 
 mappers:
     - 127.0.0.1:8070

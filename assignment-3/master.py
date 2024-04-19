@@ -23,7 +23,7 @@ import reducer_pb2_grpc
 
 import logger
 
-LOGGING_LEVEL = logging.DEBUG
+LOGGING_LEVEL = logging.INFO
 
 MAX_WORKERS = 2
 DEFAULT_MAP_TIMEOUT = 30  # second
@@ -262,18 +262,20 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 task.status = TaskStatus.FAILED
                 worker.status = error
                 logger.DUMP_LOGGER.error(
-                    "REDUCE task FAILED. task: %s worker: %s", task, worker
+                    "REDUCE task FAILED(SERVER-ERROR). task: %s worker: %s",
+                    task,
+                    worker,
                 )
                 return
 
-            for centroid in reply.updated_centroids:
-                logger.DUMP_LOGGER.info(" abcd %s %s %s %s ",centroid.centroid.x, centroid.centroid.y, round(centroid.centroid.x, 4), round(centroid.centroid.y, 4) )
-                self.new_centroids[centroid.index] = (
-                    round(centroid.centroid.x, 4),
-                    round(centroid.centroid.y, 4) ,
+            if reply.status == reducer_pb2.Status.FAILED:
+                logger.DUMP_LOGGER.info("MATCHEDDDDDD")
+                task.status = TaskStatus.FAILED
+                worker.status = WorkerStatus.FREE
+                logger.DUMP_LOGGER.error(
+                    "REDUCE task FAILED. task: %s worker: %s", task, worker
                 )
-
-            # logger.DUMP_LOGGER.info("New centroids %s", str(self.centroids[0:self.n_centroids]))
+                return
 
             # Update in the tasks reduce and store the results in necessary files
             task.status = TaskStatus.COMPLETED
@@ -281,6 +283,20 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             logger.DUMP_LOGGER.info(
                 "REDUCE task COMPLETED. task: %s worker: %s", task, worker
             )
+
+            for centroid in reply.updated_centroids:
+                logger.DUMP_LOGGER.debug(
+                    "Received Centroids(with rounded): %s %s %s %s ",
+                    centroid.centroid.x,
+                    centroid.centroid.y,
+                    round(centroid.centroid.x, 4),
+                    round(centroid.centroid.y, 4),
+                )
+                self.new_centroids[centroid.index] = (
+                    round(centroid.centroid.x, 4),
+                    round(centroid.centroid.y, 4),
+                )
+            logger.DUMP_LOGGER.info("New centroids %s", str(self.centroids[0:self.n_centroids]))
 
     def __submit_map_task(
         self, task: MapTask, arg: mapper_pb2.DoMapTaskArgs, worker: Worker
@@ -435,15 +451,16 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             time.sleep(SLEEP_TIME)
 
     def check_convergence(self):
-        new_list = self.centroids[0:self.n_centroids]
-        old_list = self.centroids[self.n_centroids: 2*self.n_centroids]
+        new_list = self.centroids[0 : self.n_centroids]
+        old_list = self.centroids[self.n_centroids : 2 * self.n_centroids]
 
+        converged = True
         for i in range(self.n_centroids):
-            if(new_list[0] == old_list [0] and new_list [1] == old_list [1]):
-                return True
+            converged = converged and (
+                new_list[i][0] == old_list[i][0] and new_list[i][1] == old_list[i][1]
+            )
+        return converged
 
-        return False 
-        
     def run(self):
         """run job"""
         for i in range(self.n_iterations):
@@ -473,14 +490,22 @@ class Master(master_pb2_grpc.MasterServicesServicer):
             logger.DUMP_LOGGER.info("Starting iteration %s Reduce", i)
             self.__run_reduce(i)
 
-            if(i>0 and self.check_convergence()):
-                logger.DUMP_LOGGER.info("centroid convergence acheived")
-                break 
-                
-              
-        with open('Data/centroid.txt', "w", encoding="UTF-8") as file:
+            if i > 0 and self.check_convergence():
+                logger.DUMP_LOGGER.info("centroid converged after iter: %s ", i + 1)
+                break
+
+        centoids_iteration_split = []
+        for i in range(0, len(self.centroids), self.n_centroids):
+            centoids_iteration_split.append(self.centroids[i : i + self.n_centroids])
+
+        with open("Data/centroid.txt", "w", encoding="UTF-8") as file:
             # file.write(str(self.centroids[0:self.n_centroids]))
-            file.write(str(self.centroids[0:self.n_centroids]))
+            file.write(str(self.centroids[0 : self.n_centroids]) + "\n")
+            file.write(
+                "\n\n--Centroid/Iteration (In reverse)--\n\n"
+                + "\n".join(map(lambda x: str(x), centoids_iteration_split))
+                + "\n"
+            )
         self.stop()
 
 

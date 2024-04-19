@@ -180,3 +180,6 @@ assignment-2/*.tmp
 # Assignment-3 logs file
 assignment-3/logs/*
 assignment-3/*.tmp
+assignment-3/Data/Mappers
+assignment-3/Data/Reducers
+assignment-3/Data/centroid.txt

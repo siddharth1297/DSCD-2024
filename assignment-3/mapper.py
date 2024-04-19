@@ -18,7 +18,7 @@ import mapper_pb2_grpc
 
 import common_messages_pb2
 
-LOGGING_LEVEL = logging.DEBUG
+LOGGING_LEVEL = logging.INFO
 MAX_WORKERS = 2
 
 BASE_DIR = "Data/"
@@ -31,7 +31,6 @@ class ReduceTaskHandler:
         self.reduce_key = reduce_id
         self.map_id = map_id
         self.partition_file = f"M{self.map_id}/partition_{self.reduce_key}.txt"
-        
 
     def __str__(self):
         return f"[{self.reduce_key}: {self.map_id} {self.partition_file}]"
@@ -39,7 +38,8 @@ class ReduceTaskHandler:
     @classmethod
     def from_pb_to_impl_GetDataArgs(cls, request: mapper_pb2.GetDataArgs):
         """Converts DoMapTaskArgs(pb format) to ReduceTask"""
-        return cls(reduce_id = request.parition_key, map_id = request.map_id)
+        return cls(reduce_id=request.parition_key, map_id=request.map_id)
+
 
 class MapTask:
     """MapTask structure"""
@@ -86,35 +86,6 @@ class MapTask:
                     closest_centroid_index = idx
             self.points_list_clustered.append((closest_centroid_index, (point, 1)))
 
-    # def create_mappers_directory(self):
-    #     """Create Mappers directory if not already created"""
-    #     # Create Mappers directory
-    #     data_directory = "Data"
-    #     mappers_directory = os.path.join(data_directory, "Mappers")
-    #     try:
-    #         # Try to create Reducers directory
-    #         os.makedirs(mappers_directory )
-    #         logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory }' created.")
-    #     except FileExistsError:
-    #         # Directory already exists
-    #         logger.DUMP_LOGGER.debug(f"Directory '{mappers_directory }' already exists.")
-    #     except Exception as e:
-    #         # Handle other exceptions
-    #         logger.DUMP_LOGGER.error(f"Error creating directory '{mappers_directory }': {e}")
-
-
-    #     folder_name = os.path.join("Data", "Mappers", f"M{self.map_id}")
-    #     try:
-    #         # Try to create Reducers directory
-    #         os.makedirs(folder_name)
-    #         logger.DUMP_LOGGER.debug(f"Directory '{folder_name }' created.")
-    #     except FileExistsError:
-    #         # Directory already exists
-    #         logger.DUMP_LOGGER.debug(f"Directory '{folder_name }' already exists.")
-    #     except Exception as e:
-    #         # Handle other exceptions
-    #         logger.DUMP_LOGGER.error(f"Error creating directory '{folder_name }': {e}")
-
     def create_mappers_directory(self):
         """Create Mappers directory if not already created"""
         # Create Mappers directory
@@ -123,12 +94,12 @@ class MapTask:
             os.makedirs(data_directory)
         except FileExistsError:
             pass
-        
+
         mapper_dir = data_directory + "/" + f"M{self.map_id}"
         try:
             os.makedirs(mapper_dir)
         except FileExistsError:
-            pass      
+            pass
 
     def partition_points(self):
         """Partition the points into R buckets and write to files"""
@@ -212,8 +183,7 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
             files=map_task.output_file_path_list, worker_id=self.worker_id
         )
         return response
-    
-    
+
     def dummy_DoMap(self):
         m = MapTask(
             0,
@@ -233,34 +203,47 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
             for line in file:
                 if line == "":
                     continue
-                comma_separated = line.replace('(', '').replace(')', '')
-                values = comma_separated.split(',')
+                comma_separated = line.replace("(", "").replace(")", "")
+                values = comma_separated.split(",")
                 if len(values) != 4:
                     print("Error while parssing file. Line: ", line)
-                item = [int(values[0]), float(values[1]), float(values[2]), int(values[3])]
-                #item = (int(values[0]), ((float(values[1]), float(values[2])), int(values[3])))
+                item = [
+                    int(values[0]),
+                    float(values[1]),
+                    float(values[2]),
+                    int(values[3]),
+                ]
+                # item = (int(values[0]), ((float(values[1]), float(values[2])), int(values[3])))
                 data.append(item)
-        #print(data)
-        #exit(1)
+        # print(data)
+        # exit(1)
         return data
 
     def GetData(
         self, request: mapper_pb2.GetDataArgs, context
     ) -> mapper_pb2.GetDataReply:
         """Implement the GetData RPC method"""
-        logger.DUMP_LOGGER.info("GetData invoked for key %s map_id %s", request.partition_key, request.map_id)
+        logger.DUMP_LOGGER.info(
+            "GetData invoked for key %s map_id %s",
+            request.partition_key,
+            request.map_id,
+        )
         data = self.__get_data(request.partition_key, request.map_id)
-        data_pb2 = list(map(lambda x: mapper_pb2.DataEntry(key=x[0],
-                                                        point = common_messages_pb2.Point(x=x[1], y=x[2]),
-                                                        value=x[3]), data))
-        
+        data_pb2 = list(
+            map(
+                lambda x: mapper_pb2.DataEntry(
+                    key=x[0],
+                    point=common_messages_pb2.Point(x=x[1], y=x[2]),
+                    value=x[3],
+                ),
+                data,
+            )
+        )
+
         response = mapper_pb2.GetDataReply()
         response.entries.extend(data_pb2)
         logger.DUMP_LOGGER.info("GetData Exited")
         return response
-
-
-        
 
 
 if __name__ == "__main__":

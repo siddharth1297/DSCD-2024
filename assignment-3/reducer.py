@@ -50,7 +50,6 @@ class ReduceTask:
             if key not in self.keywise_points:
                 self.keywise_points[key] = []
             self.keywise_points[key].append(data_point)
-    
 
     def find_mean_keywise(self) -> None:
         """Calculates the centroids found by average"""
@@ -68,14 +67,16 @@ class ReduceTask:
             average_x = sum_x / sum_count
             average_y = sum_y / sum_count
 
-            self.keywise_mean_centroids[key] = [(round(average_x, 4), round(average_y, 4))]
+            self.keywise_mean_centroids[key] = [
+                (round(average_x, 4), round(average_y, 4))
+            ]
 
         logger.DUMP_LOGGER.info(
             "Centroid list for reduce task %s is: %s",
             self.reduce_id,
             self.keywise_mean_centroids,
         )
-    
+
     def create_reducers_directory(self):
         """Create Reducers directory if not already created"""
         # Create Reducers directory
@@ -102,7 +103,7 @@ class ReduceTask:
     #     #     logger.DUMP_LOGGER.debug(f"Directory '{reducers_directory}' created.")
     #     # else:
     #     #     logger.DUMP_LOGGER.debug(f"Directory '{reducers_directory}' already exists.")
-        
+
     #     try:
     #         # Try to create Reducers directory
     #         os.makedirs(reducers_directory)
@@ -128,16 +129,19 @@ class ReduceTask:
             for key, value in self.keywise_mean_centroids.items():
                 file.write(f"{key}: {value}\n")
 
-        logger.DUMP_LOGGER.debug("Centroids dumped to %s for task %s", file_path, str(self.reduce_id))
-        
+        logger.DUMP_LOGGER.debug(
+            "Centroids dumped to %s for task %s", file_path, str(self.reduce_id)
+        )
+
         # Dump centroids to file
         with open(file_path, "w") as file:
             for key, value in self.keywise_mean_centroids.items():
                 file.write(f"{key}: {value}\n")
 
-        logger.DUMP_LOGGER.debug("Centroids dumped to %s for task %s", file_path, str(self.reduce_id))
+        logger.DUMP_LOGGER.debug(
+            "Centroids dumped to %s for task %s", file_path, str(self.reduce_id)
+        )
 
-        
     def __get_data_from_mapper(
         self, arg: mapper_pb2.GetDataArgs, addr: str
     ) -> typing.List[typing.Tuple[int, typing.Tuple[float, int]]]:
@@ -173,7 +177,7 @@ class ReduceTask:
             map(lambda x: (x.key, ((x.point.x, x.point.y), x.value)), reply.entries)
         )
         return data
-   
+
     def do_reduce_task(self) -> None:
         """Do the reduce task as per the specificatio"""
         logger.DUMP_LOGGER.info("Got a reduce task: %s", str(self))
@@ -237,8 +241,6 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
         """Stop"""
         self.grpc_server.stop(1.5).wait()
 
-    
-    
     def DoReduce(
         self, request: reducer_pb2.DoReduceTaskArgs, context
     ) -> reducer_pb2.DoReduceTaskReply:
