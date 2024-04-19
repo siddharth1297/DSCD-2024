@@ -31,7 +31,7 @@ class ReduceTaskHandler:
         self.reduce_key = reduce_id
         self.map_id = map_id
         self.partition_file = f"M{self.map_id}/partition_{self.reduce_key}.txt"
-        return cls(reduce_id = request.parition_key, map_id = request.map_id)
+        
 
     def __str__(self):
         return f"[{self.reduce_key}: {self.map_id} {self.partition_file}]"

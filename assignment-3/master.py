@@ -173,6 +173,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
         split_size = math.ceil(self.n_points / self.n_map)
         start = 0
         self.centroids = points[0 : self.n_centroids]
+        self.centroids = [round(i, 4) for i in self.centroids]
         while start < self.n_points:
             end = min(start + split_size, self.n_points)
             self.splits.append([start, end])
@@ -266,9 +267,10 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 return
 
             for centroid in reply.updated_centroids:
+                logger.DUMP_LOGGER.info(" abcd %s %s %s %s ",centroid.centroid.x, centroid.centroid.y, round(centroid.centroid.x, 4), round(centroid.centroid.y, 4) )
                 self.new_centroids[centroid.index] = (
-                    centroid.centroid.x,
-                    centroid.centroid.y,
+                    round(centroid.centroid.x, 4),
+                    round(centroid.centroid.y, 4) ,
                 )
 
             # logger.DUMP_LOGGER.info("New centroids %s", str(self.centroids[0:self.n_centroids]))
@@ -463,7 +465,9 @@ class Master(master_pb2_grpc.MasterServicesServicer):
 
             # TODO: Check convergence. If it converges, then stop
 
-        # TODO: Print centroids
+        with open('Data/centroid.txt', "w", encoding="UTF-8") as file:
+            # file.write(str(self.centroids[0:self.n_centroids]))
+            file.write(str(self.centroids))
         self.stop()
 
 
