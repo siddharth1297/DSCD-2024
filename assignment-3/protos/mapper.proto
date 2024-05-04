@@ -18,9 +18,11 @@ message DoMapTaskArgs {
     string filename = 6;
 }
 
+
 message DoMapTaskReply {
     repeated string files = 1;
     int32 worker_id = 2 ; 
+    Status status = 3; 
 }
 
 message GetDataArgs {

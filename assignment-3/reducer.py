@@ -13,6 +13,7 @@ import grpc
 import yaml
 
 import logger
+import random
 
 import reducer_pb2
 import reducer_pb2_grpc
@@ -254,7 +255,7 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
             "reduced data: %s", str(reduce_task.keywise_mean_centroids)
         )
         reply = reducer_pb2.DoReduceTaskReply()
-        reply.status = reducer_pb2.Status.SUCCESS  # Set the status to SUCCESS
+        reply.status = common_messages_pb2.Status.SUCCESS  # Set the status to SUCCESS
 
         for key, value in reduce_task.keywise_mean_centroids.items():
             centroid_msg = reducer_pb2.Centroid()
@@ -262,6 +263,11 @@ class Reducer(reducer_pb2_grpc.ReducerServiceServicer):
             centroid_msg.centroid.x = value[0][0]
             centroid_msg.centroid.y = value[0][1]
             reply.updated_centroids.append(centroid_msg)
+
+        """Modification for making reduce tasks fail"""
+        if random.random() < 0.5:
+            reply = reducer_pb2.DoReduceTaskReply()
+            reply.status = common_messages_pb2.Status.FAILED
 
         return reply
 

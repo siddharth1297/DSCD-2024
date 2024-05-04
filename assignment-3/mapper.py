@@ -12,7 +12,7 @@ import grpc
 import yaml
 
 import logger
-
+import random
 import mapper_pb2
 import mapper_pb2_grpc
 
@@ -182,6 +182,13 @@ class Mapper(mapper_pb2_grpc.MapperServicesServicer):
         response = mapper_pb2.DoMapTaskReply(
             files=map_task.output_file_path_list, worker_id=self.worker_id
         )
+        response.status = common_messages_pb2.Status.SUCCESS
+
+        """Modification for making map tasks fail"""
+        if random.random() < 0.5:
+            response = mapper_pb2.DoMapTaskReply()
+            response.status = common_messages_pb2.Status.FAILED
+
         return response
 
     def dummy_DoMap(self):

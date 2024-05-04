@@ -6,3 +6,8 @@ message Point {
     float x = 1;
     float y = 2;
 }
+
+enum Status {
+    FAILED = 0;
+    SUCCESS = 1; 
+}
