@@ -13,10 +13,7 @@ message DoReduceTaskArgs {
     repeated string mapper_address = 2;
 }
 
-enum Status {
-    FAILED = 0;
-    SUCCESS = 1;
-}
+
 
 message Centroid {
     int32 index = 1;

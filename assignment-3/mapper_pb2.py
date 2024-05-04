@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='MapReduce',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cmapper.proto\x12\tMapReduce\x1a\x15\x63ommon_messages.proto\"\x8c\x01\n\rDoMapTaskArgs\x12\x0e\n\x06map_id\x18\x01 \x01(\x05\x12\x11\n\tstart_idx\x18\x02 \x01(\x05\x12\x0f\n\x07\x65nd_idx\x18\x03 \x01(\x05\x12\x10\n\x08n_reduce\x18\x04 \x01(\x05\x12#\n\tcentroids\x18\x05 \x03(\x0b\x32\x10.MapReduce.Point\x12\x10\n\x08\x66ilename\x18\x06 \x01(\t\"2\n\x0e\x44oMapTaskReply\x12\r\n\x05\x66iles\x18\x01 \x03(\t\x12\x11\n\tworker_id\x18\x02 \x01(\x05\"4\n\x0bGetDataArgs\x12\x15\n\rpartition_key\x18\x01 \x01(\x05\x12\x0e\n\x06map_id\x18\x02 \x01(\x05\"5\n\x0cGetDataReply\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.MapReduce.DataEntry\"H\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12\x1f\n\x05point\x18\x02 \x01(\x0b\x32\x10.MapReduce.Point\x12\r\n\x05value\x18\x03 \x01(\x05\x32\x8a\x01\n\x0eMapperServices\x12<\n\x05\x44oMap\x12\x18.MapReduce.DoMapTaskArgs\x1a\x19.MapReduce.DoMapTaskReply\x12:\n\x07GetData\x12\x16.MapReduce.GetDataArgs\x1a\x17.MapReduce.GetDataReplyb\x06proto3')
+  serialized_pb=_b('\n\x0cmapper.proto\x12\tMapReduce\x1a\x15\x63ommon_messages.proto\"\x8c\x01\n\rDoMapTaskArgs\x12\x0e\n\x06map_id\x18\x01 \x01(\x05\x12\x11\n\tstart_idx\x18\x02 \x01(\x05\x12\x0f\n\x07\x65nd_idx\x18\x03 \x01(\x05\x12\x10\n\x08n_reduce\x18\x04 \x01(\x05\x12#\n\tcentroids\x18\x05 \x03(\x0b\x32\x10.MapReduce.Point\x12\x10\n\x08\x66ilename\x18\x06 \x01(\t\"U\n\x0e\x44oMapTaskReply\x12\r\n\x05\x66iles\x18\x01 \x03(\t\x12\x11\n\tworker_id\x18\x02 \x01(\x05\x12!\n\x06status\x18\x03 \x01(\x0e\x32\x11.MapReduce.Status\"4\n\x0bGetDataArgs\x12\x15\n\rpartition_key\x18\x01 \x01(\x05\x12\x0e\n\x06map_id\x18\x02 \x01(\x05\"5\n\x0cGetDataReply\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.MapReduce.DataEntry\"H\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\x05\x12\x1f\n\x05point\x18\x02 \x01(\x0b\x32\x10.MapReduce.Point\x12\r\n\x05value\x18\x03 \x01(\x05\x32\x8a\x01\n\x0eMapperServices\x12<\n\x05\x44oMap\x12\x18.MapReduce.DoMapTaskArgs\x1a\x19.MapReduce.DoMapTaskReply\x12:\n\x07GetData\x12\x16.MapReduce.GetDataArgs\x1a\x17.MapReduce.GetDataReplyb\x06proto3')
   ,
   dependencies=[common__messages__pb2.DESCRIPTOR,])
 
@@ -114,6 +114,13 @@ _DOMAPTASKREPLY = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='status', full_name='MapReduce.DoMapTaskReply.status', index=2,
+      number=3, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -127,7 +134,7 @@ _DOMAPTASKREPLY = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=193,
-  serialized_end=243,
+  serialized_end=278,
 )
 
 
@@ -164,8 +171,8 @@ _GETDATAARGS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=245,
-  serialized_end=297,
+  serialized_start=280,
+  serialized_end=332,
 )
 
 
@@ -195,8 +202,8 @@ _GETDATAREPLY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=299,
-  serialized_end=352,
+  serialized_start=334,
+  serialized_end=387,
 )
 
 
@@ -240,11 +247,12 @@ _DATAENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=354,
-  serialized_end=426,
+  serialized_start=389,
+  serialized_end=461,
 )
 
 _DOMAPTASKARGS.fields_by_name['centroids'].message_type = common__messages__pb2._POINT
+_DOMAPTASKREPLY.fields_by_name['status'].enum_type = common__messages__pb2._STATUS
 _GETDATAREPLY.fields_by_name['entries'].message_type = _DATAENTRY
 _DATAENTRY.fields_by_name['point'].message_type = common__messages__pb2._POINT
 DESCRIPTOR.message_types_by_name['DoMapTaskArgs'] = _DOMAPTASKARGS
@@ -297,8 +305,8 @@ _MAPPERSERVICES = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   serialized_options=None,
-  serialized_start=429,
-  serialized_end=567,
+  serialized_start=464,
+  serialized_end=602,
   methods=[
   _descriptor.MethodDescriptor(
     name='DoMap',

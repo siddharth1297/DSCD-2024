@@ -26,8 +26,8 @@ import logger
 LOGGING_LEVEL = logging.INFO
 
 MAX_WORKERS = 2
-DEFAULT_MAP_TIMEOUT = 30  # second
-DEFAULT_REDUCE_TIMEOUT = 30  # second
+DEFAULT_MAP_TIMEOUT = 5  # second
+DEFAULT_REDUCE_TIMEOUT = 5  # second
 SLEEP_TIME = 3
 
 
@@ -257,7 +257,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
 
         with self.mutex:
             if reply is None:
-                assert error is not None
+                # assert error is not None
                 # Update in the tasks reduce that this job is failed
                 task.status = TaskStatus.FAILED
                 worker.status = error
@@ -268,7 +268,7 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                 )
                 return
 
-            if reply.status == reducer_pb2.Status.FAILED:
+            if reply.status == common_messages_pb2.Status.FAILED:
                 task.status = TaskStatus.FAILED
                 worker.status = WorkerStatus.FREE
                 logger.DUMP_LOGGER.error(
@@ -295,7 +295,9 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                     round(centroid.centroid.x, 4),
                     round(centroid.centroid.y, 4),
                 )
-            logger.DUMP_LOGGER.info("New centroids %s", str(self.centroids[0:self.n_centroids]))
+            logger.DUMP_LOGGER.info(
+                "New centroids %s", str(self.centroids[0 : self.n_centroids])
+            )
 
     def __submit_map_task(
         self, task: MapTask, arg: mapper_pb2.DoMapTaskArgs, worker: Worker
@@ -336,6 +338,15 @@ class Master(master_pb2_grpc.MasterServicesServicer):
                     "Map task FAILED. task: %s worker: %s", task, worker
                 )
                 return
+
+            if reply.status == common_messages_pb2.Status.FAILED:
+                task.status = TaskStatus.FAILED
+                worker.status = WorkerStatus.FREE
+                logger.DUMP_LOGGER.error(
+                    "Map task FAILED. task: %s worker: %s", task, worker
+                )
+                return
+
             # Update in the tasks map and store the results in necessary files
             task.status = TaskStatus.COMPLETED
             task.mapper_id = worker.worker_id

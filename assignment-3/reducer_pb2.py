@@ -3,7 +3,6 @@
 
 import sys
 _b=sys.version_info[0]<3 and (lambda x:x) or (lambda x:x.encode('latin1'))
-from google.protobuf.internal import enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
@@ -21,35 +20,10 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='MapReduce',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\rreducer.proto\x12\tMapReduce\x1a\x15\x63ommon_messages.proto\"=\n\x10\x44oReduceTaskArgs\x12\x11\n\treduce_id\x18\x01 \x01(\x05\x12\x16\n\x0emapper_address\x18\x02 \x03(\t\"=\n\x08\x43\x65ntroid\x12\r\n\x05index\x18\x01 \x01(\x05\x12\"\n\x08\x63\x65ntroid\x18\x02 \x01(\x0b\x32\x10.MapReduce.Point\"f\n\x11\x44oReduceTaskReply\x12!\n\x06status\x18\x01 \x01(\x0e\x32\x11.MapReduce.Status\x12.\n\x11updated_centroids\x18\x02 \x03(\x0b\x32\x13.MapReduce.Centroid*!\n\x06Status\x12\n\n\x06\x46\x41ILED\x10\x00\x12\x0b\n\x07SUCCESS\x10\x01\x32Y\n\x0eReducerService\x12G\n\x08\x44oReduce\x12\x1b.MapReduce.DoReduceTaskArgs\x1a\x1c.MapReduce.DoReduceTaskReply\"\x00\x62\x06proto3')
+  serialized_pb=_b('\n\rreducer.proto\x12\tMapReduce\x1a\x15\x63ommon_messages.proto\"=\n\x10\x44oReduceTaskArgs\x12\x11\n\treduce_id\x18\x01 \x01(\x05\x12\x16\n\x0emapper_address\x18\x02 \x03(\t\"=\n\x08\x43\x65ntroid\x12\r\n\x05index\x18\x01 \x01(\x05\x12\"\n\x08\x63\x65ntroid\x18\x02 \x01(\x0b\x32\x10.MapReduce.Point\"f\n\x11\x44oReduceTaskReply\x12!\n\x06status\x18\x01 \x01(\x0e\x32\x11.MapReduce.Status\x12.\n\x11updated_centroids\x18\x02 \x03(\x0b\x32\x13.MapReduce.Centroid2Y\n\x0eReducerService\x12G\n\x08\x44oReduce\x12\x1b.MapReduce.DoReduceTaskArgs\x1a\x1c.MapReduce.DoReduceTaskReply\"\x00\x62\x06proto3')
   ,
   dependencies=[common__messages__pb2.DESCRIPTOR,])
 
-_STATUS = _descriptor.EnumDescriptor(
-  name='Status',
-  full_name='MapReduce.Status',
-  filename=None,
-  file=DESCRIPTOR,
-  values=[
-    _descriptor.EnumValueDescriptor(
-      name='FAILED', index=0, number=0,
-      serialized_options=None,
-      type=None),
-    _descriptor.EnumValueDescriptor(
-      name='SUCCESS', index=1, number=1,
-      serialized_options=None,
-      type=None),
-  ],
-  containing_type=None,
-  serialized_options=None,
-  serialized_start=281,
-  serialized_end=314,
-)
-_sym_db.RegisterEnumDescriptor(_STATUS)
-
-Status = enum_type_wrapper.EnumTypeWrapper(_STATUS)
-FAILED = 0
-SUCCESS = 1
 
 
 
@@ -167,12 +141,11 @@ _DOREDUCETASKREPLY = _descriptor.Descriptor(
 )
 
 _CENTROID.fields_by_name['centroid'].message_type = common__messages__pb2._POINT
-_DOREDUCETASKREPLY.fields_by_name['status'].enum_type = _STATUS
+_DOREDUCETASKREPLY.fields_by_name['status'].enum_type = common__messages__pb2._STATUS
 _DOREDUCETASKREPLY.fields_by_name['updated_centroids'].message_type = _CENTROID
 DESCRIPTOR.message_types_by_name['DoReduceTaskArgs'] = _DOREDUCETASKARGS
 DESCRIPTOR.message_types_by_name['Centroid'] = _CENTROID
 DESCRIPTOR.message_types_by_name['DoReduceTaskReply'] = _DOREDUCETASKREPLY
-DESCRIPTOR.enum_types_by_name['Status'] = _STATUS
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 DoReduceTaskArgs = _reflection.GeneratedProtocolMessageType('DoReduceTaskArgs', (_message.Message,), dict(
@@ -204,8 +177,8 @@ _REDUCERSERVICE = _descriptor.ServiceDescriptor(
   file=DESCRIPTOR,
   index=0,
   serialized_options=None,
-  serialized_start=316,
-  serialized_end=405,
+  serialized_start=281,
+  serialized_end=370,
   methods=[
   _descriptor.MethodDescriptor(
     name='DoReduce',
